@@ -7,28 +7,78 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useState, useEffect } from 'react';
 import {
     Pressable,
     SafeAreaView,
     StyleSheet,
     Text,
     View,
+    ActivityIndicator,
 } from 'react-native';
 
 import { footerNavItems } from '@/app/data/home';
+import { Order } from '@/app/data/orders';
+import { ApiService } from '@/app/services/apiService';
 import { HomeFooter } from '@/components/home/HomeFooter';
 import { HOME_HORIZONTAL_PADDING } from '@/components/home/layout';
-
-// ─── Re-use the same mock data shape — swap with API later ───────────────────
-import { MOCK_ORDERS } from '@/app/data/orders';
 
 export const options = {
   headerShown: false,
 };
 
+const mapApiOrder = (apiOrder: any): Order => {
+  const firstItem = apiOrder.items?.[0] || apiOrder.orderItems?.[0];
+  const productName = 
+    apiOrder.productName || 
+    firstItem?.productName || 
+    firstItem?.product?.name || 
+    `Order #${apiOrder.orderNumber || apiOrder.id?.substring(0, 8) || ''}`;
+
+  // Price formatting
+  let priceStr = 'N0';
+  const priceVal = apiOrder.totalAmount ?? apiOrder.total ?? apiOrder.price ?? firstItem?.price;
+  if (priceVal !== undefined && priceVal !== null) {
+    priceStr = typeof priceVal === 'number' 
+      ? `₦${priceVal.toLocaleString()}` 
+      : String(priceVal).startsWith('₦') || String(priceVal).startsWith('N') 
+        ? String(priceVal) 
+        : `₦${priceVal}`;
+  }
+
+  // Image source
+  let imageSrc: any = require('@/assets/images/Productpic.png');
+  const imageUrl = firstItem?.product?.imageUrl || firstItem?.imageUrl || apiOrder.imageUrl || apiOrder.image;
+  if (imageUrl) {
+    imageSrc = { uri: imageUrl };
+  }
+
+  // Map status
+  let statusName: Order['status'] = 'Processing';
+  const statusVal = apiOrder.status;
+  if (statusVal === 0 || statusVal === 'Pending') statusName = 'Processing';
+  else if (statusVal === 1 || statusVal === 'Processing') statusName = 'Processing';
+  else if (statusVal === 4 || statusVal === 'Shipped') statusName = 'Shipped';
+  else if (statusVal === 5 || statusVal === 'Delivered') statusName = 'Delivered';
+  else if (typeof statusVal === 'string' && ['processing', 'shipped', 'delivered'].includes(statusVal.toLowerCase())) {
+    statusName = (statusVal.charAt(0).toUpperCase() + statusVal.slice(1).toLowerCase()) as Order['status'];
+  }
+
+  return {
+    id: apiOrder.id || 'ord-' + Math.random(),
+    productName,
+    price: priceStr,
+    deliveryDays: apiOrder.deliveryDays || 15,
+    image: imageSrc,
+    status: statusName,
+  };
+};
+
 export default function OrderDetailScreen() {
   const router = useRouter();
   const { orderId } = useLocalSearchParams<{ orderId?: string }>();
+  const [order, setOrder] = useState<Order | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const [fontsLoaded] = useFonts({
     Raleway_400Regular,
@@ -36,10 +86,53 @@ export default function OrderDetailScreen() {
     Raleway_700Bold,
   });
 
-  if (!fontsLoaded) return null;
+  useEffect(() => {
+    async function fetchDetails() {
+      if (!orderId) {
+        setLoading(false);
+        return;
+      }
+      try {
+        const response = await ApiService.getOrderDetails(orderId);
+        if (response && response.success && response.data) {
+          setOrder(mapApiOrder(response.data));
+        } else if (response && response.data) {
+          setOrder(mapApiOrder(response.data));
+        } else if (response && (response as any).id) {
+          setOrder(mapApiOrder(response));
+        } else {
+          // Fallback searching in list
+          const listRes = await ApiService.getMyOrders();
+          const list = Array.isArray(listRes) ? listRes : listRes.data;
+          if (Array.isArray(list)) {
+            const found = list.find((o: any) => o.id === orderId);
+            if (found) {
+              setOrder(mapApiOrder(found));
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load order details:', err);
+        try {
+          const listRes = await ApiService.getMyOrders();
+          const list = Array.isArray(listRes) ? listRes : listRes.data;
+          if (Array.isArray(list)) {
+            const found = list.find((o: any) => o.id === orderId);
+            if (found) {
+              setOrder(mapApiOrder(found));
+            }
+          }
+        } catch (fallbackErr) {
+          console.error('Fallback load also failed:', fallbackErr);
+        }
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchDetails();
+  }, [orderId]);
 
-  // Find the order — fallback to first if not found
-  const order = MOCK_ORDERS.find(o => o.id === orderId) ?? MOCK_ORDERS[0];
+  if (!fontsLoaded) return null;
 
   const handleFooterSelect = (itemId: string) => {
     if (itemId === 'home') router.replace('/screens/HomeScreen');
@@ -66,42 +159,52 @@ export default function OrderDetailScreen() {
 
         {/* ── Order detail card ── */}
         <View style={styles.content}>
-          <View style={styles.card}>
+          {loading ? (
+            <View style={styles.centerContainer}>
+              <ActivityIndicator size="large" color="#C9922A" />
+            </View>
+          ) : !order ? (
+            <View style={styles.centerContainer}>
+              <Ionicons name="alert-circle-outline" size={48} color="#C9922A" />
+              <Text style={styles.errorText} allowFontScaling={false}>Order not found</Text>
+            </View>
+          ) : (
+            <View style={styles.card}>
 
-            {/* Top row — image + name + price */}
-            <View style={styles.topRow}>
-              <View style={styles.imageWrap}>
-                <Image
-                  source={order.image}
-                  style={styles.productImage}
-                  // contentFit="contain"
-                />
+              {/* Top row — image + name + price */}
+              <View style={styles.topRow}>
+                <View style={styles.imageWrap}>
+                  <Image
+                    source={order.image}
+                    style={styles.productImage}
+                  />
+                </View>
+
+                <View style={styles.info}>
+                  <Text style={styles.productName} allowFontScaling={false}>
+                    {order.productName}
+                  </Text>
+                  <Text style={styles.delivery} allowFontScaling={false}>
+                    EST: {order.deliveryDays} WORKING DAYS
+                  </Text>
+                </View>
+
+                <Text style={styles.price} allowFontScaling={false}>
+                  {order.price}
+                </Text>
               </View>
 
-              <View style={styles.info}>
-                <Text style={styles.productName} allowFontScaling={false}>
-                  {order.productName}
-                </Text>
-                <Text style={styles.delivery} allowFontScaling={false}>
-                  EST: {order.deliveryDays} WORKING DAYS
+              {/* Divider inside card */}
+              <View style={styles.cardDivider} />
+
+              {/* Tracking message */}
+              <View style={styles.trackingWrap}>
+                <Text style={styles.trackingText} allowFontScaling={false}>
+                  Tracking details will be{'\n'}available in your email
                 </Text>
               </View>
-
-              <Text style={styles.price} allowFontScaling={false}>
-                {order.price}
-              </Text>
             </View>
-
-            {/* Divider inside card */}
-            <View style={styles.cardDivider} />
-
-            {/* Tracking message */}
-            <View style={styles.trackingWrap}>
-              <Text style={styles.trackingText} allowFontScaling={false}>
-                Tracking details will be{'\n'}available in your email
-              </Text>
-            </View>
-          </View>
+          )}
         </View>
 
         <HomeFooter
@@ -238,5 +341,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 24,
     textAlign: 'center',
+  },
+  centerContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 80,
+  },
+  errorText: {
+    color: '#8B8B8B',
+    fontFamily: 'Raleway_600SemiBold',
+    fontSize: 16,
+    marginTop: 12,
   },
 });

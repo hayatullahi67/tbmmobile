@@ -1,9 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { useMemo } from 'react';
-import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useMemo } from 'react';
+import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
-import { footerNavItems, HomeProduct, latestReleaseProducts } from '@/app/data/home';
+import { footerNavItems, HomeProduct } from '@/app/data/home';
 import { useFavorites } from '@/components/home/FavoritesContext';
 import { HomeFooter } from '@/components/home/HomeFooter';
 import { HOME_HORIZONTAL_PADDING } from '@/components/home/layout';
@@ -16,15 +16,16 @@ export const options = {
 export default function FavoriteScreen() {
   const router = useRouter();
   const { width: windowWidth } = useWindowDimensions();
-  const { favoriteIds, isFavorite, toggleFavorite } = useFavorites();
+  const { savedProducts, isFavorite, toggleFavorite, loading, refreshFavorites } = useFavorites();
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshFavorites();
+    }, [refreshFavorites])
+  );
   const gridGap = 12;
   const availableWidth = windowWidth - HOME_HORIZONTAL_PADDING * 2;
   const cardWidth = Math.floor((availableWidth - gridGap) / 2);
-
-  const favoriteProducts = useMemo(
-    () => latestReleaseProducts.filter(product => favoriteIds.includes(product.id)),
-    [favoriteIds]
-  );
 
   const footerItems = useMemo(() => footerNavItems, []);
 
@@ -48,6 +49,14 @@ export default function FavoriteScreen() {
       params: { productId: product.id },
     });
   };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.safeArea, styles.loadingContainer]}>
+        <ActivityIndicator size="large" color="#C9922A" />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -73,19 +82,27 @@ export default function FavoriteScreen() {
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.grid}>
-            {favoriteProducts.map(product => (
-              <ProductCard
-                key={product.id}
-                product={product}
-                width={cardWidth}
-                isFavorite={isFavorite(product.id)}
-                actionVariant="delete"
-                onPress={handleProductPress}
-                onFavoritePress={() => toggleFavorite(product.id)}
-              />
-            ))}
-          </View>
+          {savedProducts.length === 0 ? (
+            <View style={styles.noResultsContainer}>
+              <Text style={styles.noResultsText} allowFontScaling={false}>
+                No saved items yet
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.grid}>
+              {savedProducts.map(product => (
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  width={cardWidth}
+                  isFavorite={isFavorite(product.id)}
+                  actionVariant="delete"
+                  onPress={handleProductPress}
+                  onFavoritePress={() => toggleFavorite(product.id)}
+                />
+              ))}
+            </View>
+          )}
         </ScrollView>
 
         <HomeFooter
@@ -152,5 +169,22 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'space-between',
     rowGap: 16,
+  },
+  loadingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  noResultsContainer: {
+    flex: 1,
+    paddingVertical: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noResultsText: {
+    color: '#8A8A8F',
+    fontFamily: 'Manrope',
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
   },
 });

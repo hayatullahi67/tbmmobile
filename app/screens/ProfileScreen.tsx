@@ -7,8 +7,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker'; // ✅ FIXED: added this import
-import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import {
   Alert,
   Pressable,
@@ -20,6 +20,8 @@ import {
 } from 'react-native';
 
 import { footerNavItems } from '@/app/data/home';
+import { ApiService } from '@/app/services/apiService';
+import { TokenService } from '@/app/services/tokenService';
 import { HomeFooter } from '@/components/home/HomeFooter';
 import { HOME_HORIZONTAL_PADDING } from '@/components/home/layout';
 
@@ -31,12 +33,14 @@ const MENU_ITEMS = [
   { id: 'orders', label: 'Orders', icon: 'bag-outline' as const },
   { id: 'my-details', label: 'My Details', icon: 'card-outline' as const },
   { id: 'delivery-address', label: 'Delivery Address', icon: 'location-outline' as const },
-  { id: 'rewards', label: 'rewards', icon: 'ribbon-outline' as const },
+  // { id: 'rewards', label: 'rewards', icon: 'ribbon-outline' as const },
   { id: 'contact-us', label: 'Contact us', icon: 'notifications-outline' as const },
 ];
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const [fullName, setFullName] = useState('Andrea Hirata');
+  const [email, setEmail] = useState('hirata@gmail.com');
   const [profileUri, setProfileUri] = useState<string | null>(null);
 
   const [fontsLoaded] = useFonts({
@@ -44,6 +48,47 @@ export default function ProfileScreen() {
     Manrope_600SemiBold,
     Manrope_700Bold,
   });
+
+  useFocusEffect(
+    useCallback(() => {
+      async function loadUserData() {
+        try {
+          const profile = await ApiService.getUserProfile();
+          if (profile) {
+            if (profile.fullName) {
+              setFullName(profile.fullName);
+            } else if (profile.firstName && profile.lastName) {
+              setFullName(`${profile.firstName} ${profile.lastName}`);
+            }
+            if (profile.email) setEmail(profile.email);
+            if (profile.avatarUrl) {
+              setProfileUri(profile.avatarUrl);
+            } else {
+              const localUser = await TokenService.getUser();
+              if (localUser?.profileUri) {
+                setProfileUri(localUser.profileUri);
+              }
+            }
+          }
+        } catch (err) {
+          console.error('Failed to load live user profile:', err);
+          try {
+            const user = await TokenService.getUser();
+            if (user) {
+              if (user.fullName || (user.firstName && user.lastName)) {
+                setFullName(user.fullName || `${user.firstName} ${user.lastName}`);
+              }
+              if (user.email) setEmail(user.email);
+              if (user.profileUri) setProfileUri(user.profileUri);
+            }
+          } catch (e) {
+            console.error('Fallback load failed:', e);
+          }
+        }
+      }
+      loadUserData();
+    }, [])
+  );
 
   if (!fontsLoaded) return null;
 
@@ -63,7 +108,33 @@ export default function ProfileScreen() {
     });
 
     if (!result.canceled && result.assets.length > 0) {
-      setProfileUri(result.assets[0].uri);
+      const newUri = result.assets[0].uri;
+      const backupUri = profileUri;
+      setProfileUri(newUri);
+      try {
+        await ApiService.uploadAvatar(newUri);
+        
+        const profile = await ApiService.getUserProfile();
+        if (profile) {
+          if (profile.fullName) {
+            setFullName(profile.fullName);
+          } else if (profile.firstName && profile.lastName) {
+            setFullName(`${profile.firstName} ${profile.lastName}`);
+          }
+          if (profile.email) setEmail(profile.email);
+          if (profile.avatarUrl) setProfileUri(profile.avatarUrl);
+        }
+        
+        const activeUser = (await TokenService.getUser()) || {};
+        await TokenService.saveUser({ 
+          ...activeUser, 
+          profileUri: profile?.avatarUrl || newUri 
+        });
+      } catch (e: any) {
+        console.error('Failed to save profile picture state:', e);
+        setProfileUri(backupUri);
+        Alert.alert('Upload Failed', e.message || 'Failed to upload profile picture to server.');
+      }
     }
   };
 
@@ -73,7 +144,12 @@ export default function ProfileScreen() {
     if (itemId === 'favorite') router.push('/screens/FavoriteScreen');
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await TokenService.clearAuth();
+    } catch (e) {
+      console.error('Failed to clear tokens on logout:', e);
+    }
     router.replace('/screens/WelcomeScreen');
   };
 
@@ -92,8 +168,8 @@ export default function ProfileScreen() {
           </Text>
 
           <Pressable style={styles.notifButton} hitSlop={10}>
-            <Ionicons name="notifications-outline" size={22} color="#C9922A" />
-            <View style={styles.notifBadge} />
+            {/* <Ionicons name="notifications-outline" size={22} color="#C9922A" />
+            <View style={styles.notifBadge} /> */}
           </Pressable>
         </View>
 
@@ -126,14 +202,18 @@ export default function ProfileScreen() {
             </Pressable>
 
             {/* Name + email */}
-            <View style={styles.profileInfo}>
+            <Pressable
+              onPress={() => router.push('/screens/ProfileDetailScreen')}
+              style={({ pressed }) => [styles.profileInfo, pressed && styles.pressed]}
+              hitSlop={6}
+            >
               <Text style={styles.fullName} allowFontScaling={false}>
-                Andrea Hirata
+                {fullName}
               </Text>
               <Text style={styles.email} allowFontScaling={false}>
-                hirata@gmail.com
+                {email}
               </Text>
-            </View>
+            </Pressable>
           </View>
 
           {/* ── Menu list — bleeds edge-to-edge ── */}

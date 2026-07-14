@@ -1,25 +1,28 @@
 import {
-    Raleway_400Regular,
-    Raleway_500Medium,
-    Raleway_700Bold,
-    useFonts,
+  Raleway_400Regular,
+  Raleway_500Medium,
+  Raleway_700Bold,
+  useFonts,
 } from '@expo-google-fonts/raleway';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from 'react-native';
 
 import { footerNavItems } from '@/app/data/home';
+import { ApiService } from '@/app/services/apiService';
 import { HomeFooter } from '@/components/home/HomeFooter';
 import { HOME_HORIZONTAL_PADDING } from '@/components/home/layout';
 
@@ -31,17 +34,29 @@ export default function AddressFormScreen() {
     mode?: string;
     id?: string;
     fullName?: string;
-    address?: string;
+    street?: string;
+    city?: string;
+    state?: string;
+    postalCode?: string;
+    country?: string;
     phone?: string;
+    deliveryNotes?: string;
+    isDefault?: string;
   }>();
 
   const isEdit = params.mode === 'edit';
 
-  // Pre-fill fields when editing
+  // Pre-fill all 9 fields when editing
   const [fullName, setFullName] = useState(params.fullName ?? '');
-  const [email, setEmail] = useState('');
   const [phone, setPhone] = useState(params.phone ?? '');
-  const [address, setAddress] = useState(params.address ?? '');
+  const [street, setStreet] = useState(params.street ?? '');
+  const [city, setCity] = useState(params.city ?? '');
+  const [state, setState] = useState(params.state ?? '');
+  const [postalCode, setPostalCode] = useState(params.postalCode ?? '');
+  const [country, setCountry] = useState(params.country ?? '');
+  const [deliveryNotes, setDeliveryNotes] = useState(params.deliveryNotes ?? '');
+  const [isDefault, setIsDefault] = useState(params.isDefault === 'true');
+  const [submitting, setSubmitting] = useState(false);
 
   const [fontsLoaded] = useFonts({
     Raleway_400Regular,
@@ -51,9 +66,59 @@ export default function AddressFormScreen() {
 
   if (!fontsLoaded) return null;
 
-  const handleSubmit = () => {
-    // TODO: save to API / state management
-    router.back();
+  const handleSubmit = async () => {
+    if (!fullName.trim()) {
+      Alert.alert('Validation Error', 'Full Name is required.');
+      return;
+    }
+    if (!phone.trim()) {
+      Alert.alert('Validation Error', 'Phone Number is required.');
+      return;
+    }
+    if (!street.trim()) {
+      Alert.alert('Validation Error', 'Street Address is required.');
+      return;
+    }
+    if (!city.trim()) {
+      Alert.alert('Validation Error', 'City is required.');
+      return;
+    }
+    if (!state.trim()) {
+      Alert.alert('Validation Error', 'State is required.');
+      return;
+    }
+    if (!country.trim()) {
+      Alert.alert('Validation Error', 'Country is required.');
+      return;
+    }
+
+    const payload = {
+      fullName: fullName.trim(),
+      street: street.trim(),
+      city: city.trim(),
+      state: state.trim(),
+      postalCode: postalCode.trim(),
+      country: country.trim(),
+      phone: phone.trim(),
+      deliveryNotes: deliveryNotes.trim(),
+      isDefault,
+    };
+
+    try {
+      setSubmitting(true);
+      if (isEdit && params.id) {
+        await ApiService.updateAddress(params.id, payload);
+        Alert.alert('Success', 'Address updated successfully.');
+      } else {
+        await ApiService.createAddress(payload);
+        Alert.alert('Success', 'Address added successfully.');
+      }
+      router.back();
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to save address.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleFooterSelect = (itemId: string) => {
@@ -98,49 +163,105 @@ export default function AddressFormScreen() {
             <TextInput
               value={fullName}
               onChangeText={setFullName}
-              placeholder="Full Name"
+              placeholder="Full Name (Required)"
               placeholderTextColor="#6B6B6B"
               style={styles.input}
               autoCapitalize="words"
               allowFontScaling={false}
             />
             <TextInput
-              value={email}
-              onChangeText={setEmail}
-              placeholder="Email"
-              placeholderTextColor="#6B6B6B"
-              style={styles.input}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              allowFontScaling={false}
-            />
-            <TextInput
               value={phone}
               onChangeText={setPhone}
-              placeholder="Phone number"
+              placeholder="Phone number (Required)"
               placeholderTextColor="#6B6B6B"
               style={styles.input}
               keyboardType="phone-pad"
               allowFontScaling={false}
             />
             <TextInput
-              value={address}
-              onChangeText={setAddress}
-              placeholder="Address"
+              value={street}
+              onChangeText={setStreet}
+              placeholder="Street Address (Required)"
               placeholderTextColor="#6B6B6B"
               style={styles.input}
+              autoCapitalize="sentences"
               allowFontScaling={false}
             />
+            <TextInput
+              value={city}
+              onChangeText={setCity}
+              placeholder="City (Required)"
+              placeholderTextColor="#6B6B6B"
+              style={styles.input}
+              autoCapitalize="words"
+              allowFontScaling={false}
+            />
+            <TextInput
+              value={state}
+              onChangeText={setState}
+              placeholder="State (Required)"
+              placeholderTextColor="#6B6B6B"
+              style={styles.input}
+              autoCapitalize="words"
+              allowFontScaling={false}
+            />
+            <TextInput
+              value={postalCode}
+              onChangeText={setPostalCode}
+              placeholder="Postal Code (Optional)"
+              placeholderTextColor="#6B6B6B"
+              style={styles.input}
+              keyboardType="numeric"
+              allowFontScaling={false}
+            />
+            <TextInput
+              value={country}
+              onChangeText={setCountry}
+              placeholder="Country (Required)"
+              placeholderTextColor="#6B6B6B"
+              style={styles.input}
+              autoCapitalize="words"
+              allowFontScaling={false}
+            />
+            <TextInput
+              value={deliveryNotes}
+              onChangeText={setDeliveryNotes}
+              placeholder="Delivery Notes (Optional)"
+              placeholderTextColor="#6B6B6B"
+              style={styles.input}
+              multiline
+              numberOfLines={3}
+              allowFontScaling={false}
+            />
+
+            {/* ── Checkbox ── */}
+            <Pressable
+              onPress={() => setIsDefault(curr => !curr)}
+              style={styles.defaultCheckboxRow}
+              hitSlop={10}
+            >
+              <View style={[styles.checkbox, isDefault && styles.checkboxActive]}>
+                {isDefault && <Ionicons name="checkmark" size={12} color="#000000" />}
+              </View>
+              <Text style={styles.checkboxLabel} allowFontScaling={false}>
+                Set as default delivery address
+              </Text>
+            </Pressable>
           </View>
 
           {/* ── Submit button ── */}
           <Pressable
             onPress={handleSubmit}
-            style={({ pressed }) => [styles.submitButton, pressed && styles.pressed]}
+            disabled={submitting}
+            style={({ pressed }) => [styles.submitButton, (pressed || submitting) && styles.pressed]}
           >
-            <Text style={styles.submitButtonText} allowFontScaling={false}>
-              {isEdit ? 'Save changes' : 'Add new address'}
-            </Text>
+            {submitting ? (
+              <ActivityIndicator size="small" color="#000000" />
+            ) : (
+              <Text style={styles.submitButtonText} allowFontScaling={false}>
+                {isEdit ? 'Save changes' : 'Add new address'}
+              </Text>
+            )}
           </Pressable>
         </ScrollView>
 
@@ -164,8 +285,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000000',
   },
-
-  // ── Header ──────────────────────────────────────────────────────────────────
   header: {
     height: 41,
     alignItems: 'center',
@@ -196,8 +315,6 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 4,
   },
-
-  // ── Scroll ───────────────────────────────────────────────────────────────────
   scroll: { flex: 1 },
   content: {
     paddingHorizontal: HOME_HORIZONTAL_PADDING,
@@ -205,32 +322,51 @@ const styles = StyleSheet.create({
     paddingBottom: 110,
     gap: 20,
   },
-
-  // ── Section label ────────────────────────────────────────────────────────────
   sectionLabel: {
     color: '#6B6B6B',
     fontFamily: 'Raleway_500Medium',
     fontSize: 15,
     lineHeight: 18,
   },
-
-  // ── Fields ───────────────────────────────────────────────────────────────────
   fieldGroup: {
     gap: 14,
   },
   input: {
     width: '100%',
-    height: 56,
     borderRadius: 10,
     backgroundColor: '#252523',
     paddingHorizontal: 16,
     color: '#FFFFFF',
     fontFamily: 'Raleway_400Regular',
     fontSize: 14,
-    lineHeight: 18,
+    minHeight: 56,
+    paddingVertical: 14,
   },
-
-  // ── Submit button ─────────────────────────────────────────────────────────────
+  defaultCheckboxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  checkbox: {
+    width: 18,
+    height: 18,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: '#C9922A',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxActive: {
+    backgroundColor: '#C9922A',
+  },
+  checkboxLabel: {
+    color: '#C9922A',
+    fontFamily: 'Raleway_600SemiBold',
+    fontSize: 13,
+    fontWeight: '600',
+  },
   submitButton: {
     width: '100%',
     height: 56,
@@ -241,12 +377,11 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   submitButtonText: {
-    color: '#FFFFFF',
+    color: '#000000',
     fontFamily: 'Raleway_700Bold',
     fontSize: 16,
     fontWeight: '700',
     lineHeight: 20,
   },
-
   pressed: { opacity: 0.78 },
 });

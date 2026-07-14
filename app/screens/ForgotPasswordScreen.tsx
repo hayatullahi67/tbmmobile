@@ -9,7 +9,10 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
+import { ApiService } from '../services/apiService';
+import FeedbackModal from '@/components/FeedbackModal';
 import {
+    ActivityIndicator,
     Dimensions,
     KeyboardAvoidingView,
     Platform,
@@ -32,6 +35,60 @@ export default function ForgotPasswordScreen() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [emailSent, setEmailSent] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  // Modal State
+  const [modalVisible, setModalVisible] = useState(false);
+  const [modalConfig, setModalConfig] = useState<{
+    type: 'success' | 'error' | 'info';
+    title: string;
+    message: string;
+    onClose?: () => void;
+  }>({
+    type: 'info',
+    title: '',
+    message: '',
+  });
+
+  const showFeedback = (type: 'success' | 'error' | 'info', title: string, message: string, onClose?: () => void) => {
+    setModalConfig({ type, title, message, onClose });
+    setModalVisible(true);
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email.trim()) {
+      showFeedback('error', 'Validation Error', 'Please enter your email address.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const response = await ApiService.forgotPassword(email.trim());
+      if (response.success) {
+        showFeedback(
+          'success',
+          'Success',
+          response.message || 'If the email exists, a password reset link has been sent.',
+          () => {
+            setEmailSent(true);
+          }
+        );
+      } else {
+        showFeedback(
+          'error',
+          'Failed',
+          response.message || 'Something went wrong. Please check your network connection.'
+        );
+      }
+    } catch (err: any) {
+      showFeedback(
+        'error',
+        'Error',
+        err.message || 'Something went wrong. Please check your network connection.'
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const [fontsLoaded] = useFonts({
     Manrope_400Regular,
@@ -65,16 +122,6 @@ export default function ForgotPasswordScreen() {
           style={styles.gradient}
         />
 
-        {/* ── Brand — top center ── */}
-        <View style={styles.brand}>
-          <Text style={styles.brandName} allowFontScaling={false}>
-            Z I O R A
-          </Text>
-          <Text style={styles.brandTagline} allowFontScaling={false}>
-            AI VISUALIZER &amp; ESTIMATES
-          </Text>
-        </View>
-
         {/* ── Body ── */}
         <KeyboardAvoidingView
           style={styles.keyboardView}
@@ -86,6 +133,21 @@ export default function ForgotPasswordScreen() {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
+            {/* ── Brand — center inside scroll ── */}
+            <View style={styles.brand}>
+              <Image
+                source={require('@/assets/images/logo.png')}
+                style={styles.tbmLogo}
+                contentFit="contain"
+              />
+              <Text style={styles.brandName} allowFontScaling={false}>
+                Z I O R A ( B O G A T )
+              </Text>
+              <Text style={styles.brandTagline} allowFontScaling={false}>
+                AI VISUALIZER &amp; ESTIMATES
+              </Text>
+            </View>
+
             {emailSent ? (
               /* ── Email sent state ── */
               <View style={styles.sentContainer}>
@@ -129,15 +191,25 @@ export default function ForgotPasswordScreen() {
                   value={email}
                   onChangeText={setEmail}
                   allowFontScaling={false}
+                  editable={!loading}
                 />
 
                 <Pressable
-                  onPress={() => setEmailSent(true)}
-                  style={({ pressed }) => [styles.actionButton, pressed && styles.pressed]}
+                  onPress={handleForgotPassword}
+                  disabled={loading}
+                  style={({ pressed }) => [
+                    styles.actionButton,
+                    pressed && styles.pressed,
+                    loading && { opacity: 0.7 }
+                  ]}
                 >
-                  <Text style={styles.actionButtonText} allowFontScaling={false}>
-                    Send to Email
-                  </Text>
+                  {loading ? (
+                    <ActivityIndicator color="#000000" />
+                  ) : (
+                    <Text style={styles.actionButtonText} allowFontScaling={false}>
+                      Send to Email
+                    </Text>
+                  )}
                 </Pressable>
 
                 <View style={styles.rule} />
@@ -156,6 +228,18 @@ export default function ForgotPasswordScreen() {
           </ScrollView>
         </KeyboardAvoidingView>
       </View>
+      <FeedbackModal
+        visible={modalVisible}
+        type={modalConfig.type}
+        title={modalConfig.title}
+        message={modalConfig.message}
+        onClose={() => {
+          setModalVisible(false);
+          if (modalConfig.onClose) {
+            modalConfig.onClose();
+          }
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -189,18 +273,21 @@ const styles = StyleSheet.create({
 
   // ── Brand ────────────────────────────────────────────────────────────────────
   brand: {
-    position: 'absolute',
-    top: 56,
-    left: 0,
-    right: 0,
     alignItems: 'center',
+    // marginTop: ,
+    marginBottom: 80,
+  },
+  tbmLogo: {
+    width: 60,
+    height: 60,
+    marginBottom: 10,
   },
   brandName: {
     color: GOLD,
     fontFamily: 'Manrope_500Medium',
-    fontSize: 28,
-    letterSpacing: 6,
-    lineHeight: 34,
+    fontSize: 20,
+    letterSpacing: 4,
+    lineHeight: 26,
   },
   brandTagline: {
     color: '#FFFFFF',

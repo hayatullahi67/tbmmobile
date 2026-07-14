@@ -6,8 +6,8 @@ import {
     useFonts,
 } from '@expo-google-fonts/raleway';
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
+import { useMemo, useState, useCallback } from 'react';
 import {
     KeyboardAvoidingView,
     Platform,
@@ -45,7 +45,13 @@ function formatCurrency(amount: number) {
 export default function CheckoutScreen() {
   const router = useRouter();
   const { productId } = useLocalSearchParams<{ productId?: string }>();
-  const { cartItems } = useCart();
+  const { cartItems, refreshCart } = useCart();
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshCart();
+    }, [refreshCart])
+  );
   const [selectedState] = useState('Lagos - N5000');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');

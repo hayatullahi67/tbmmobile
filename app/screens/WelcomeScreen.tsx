@@ -54,8 +54,13 @@ export default function WelcomeScreen() {
 
         {/* ── Brand — top center ── */}
         <View style={styles.brand}>
+          <Image
+            source={require('@/assets/images/logo.png')}
+            style={styles.tbmLogo}
+            contentFit="contain"
+          />
           <Text style={styles.brandName} allowFontScaling={false}>
-            Z I O R A
+            Z I O R A ( B O G A T )
           </Text>
           <Text style={styles.brandTagline} allowFontScaling={false}>
             AI VISUALIZER &amp; ESTIMATES
@@ -153,17 +158,22 @@ const styles = StyleSheet.create({
   // ── Brand ────────────────────────────────────────────────────────────────────
   brand: {
     position: 'absolute',
-    top: 96,
+    top: 130,
     left: 0,
     right: 0,
     alignItems: 'center',
   },
+  tbmLogo: {
+    width: 60,
+    height: 60,
+    marginBottom: 10,
+  },
   brandName: {
     color: '#C9922A',
     fontFamily: 'Manrope_500Medium',
-    fontSize: 28,
-    letterSpacing: 6,
-    lineHeight: 34,
+    fontSize: 20,
+    letterSpacing: 4,
+    lineHeight: 26,
   },
   brandTagline: {
     color: '#FFFFFF',

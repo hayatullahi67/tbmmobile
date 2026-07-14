@@ -210,8 +210,9 @@ export default function SelectComponentsScreen() {
   };
 
   // Click Add to Cart action - maps sub-components to actual HomeProduct context items!
-  const handleAddToCart = () => {
+  const handleAddToCart = async () => {
     let addedCount = 0;
+    const itemsToAdd: { product: HomeProduct; qty: number }[] = [];
     
     componentsList.forEach((comp, idx) => {
       const qty = quantities[idx];
@@ -223,37 +224,45 @@ export default function SelectComponentsScreen() {
           // Convert price to string format suitable for parsePrice in CartContext: "N<price>"
           // e.g. "N4250" so that Number("N4250".replace(/[^0-9]/g, '')) resolves to 4250!
           price: `N${comp.priceVal}`, 
-          image: comp.image,
+          image: { uri: comp.image },
           description: comp.description,
           review: `Premium components rated for highest fidelity build environments.`,
           availability: 'In stock - Ready to dispatch',
           delivery: comp.deliveryText,
           colors: ['#1A1A1A', '#C9922A'],
         };
-        
-        addToCart(productItem, qty);
+        itemsToAdd.push({ product: productItem, qty });
         addedCount += qty;
       }
     });
 
-    Alert.alert(
-      'Added to Cart',
-      `Successfully added ${addedCount} premium component items to your cart!`,
-      [
-        {
-          text: 'View Cart',
-          onPress: () => {
-            // Push to the actual Cart Screen previously constructed!
-            router.push('/screens/CartScreen');
+    if (itemsToAdd.length === 0) return;
+
+    try {
+      // Process additions concurrently
+      await Promise.all(itemsToAdd.map(item => addToCart(item.product, item.qty)));
+
+      Alert.alert(
+        'Added to Cart',
+        `Successfully added ${addedCount} premium component items to your cart!`,
+        [
+          {
+            text: 'View Cart',
+            onPress: () => {
+              // Push to the actual Cart Screen previously constructed!
+              router.push('/screens/CartScreen');
+            },
+            style: 'default',
           },
-          style: 'default',
-        },
-        {
-          text: 'Stay Here',
-          style: 'cancel',
-        },
-      ]
-    );
+          {
+            text: 'Stay Here',
+            style: 'cancel',
+          },
+        ]
+      );
+    } catch (err: any) {
+      Alert.alert('Cart Error', err.message || 'Failed to add items to cart.');
+    }
   };
 
   const handleFooterSelect = (itemId: string) => {

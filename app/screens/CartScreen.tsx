@@ -5,8 +5,8 @@ import {
 } from '@expo-google-fonts/raleway';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import { useRouter, useFocusEffect } from 'expo-router';
+import React, { useMemo, useState, useCallback } from 'react';
 import {
   Pressable,
   SafeAreaView,
@@ -40,8 +40,14 @@ function parsePrice(price: string) {
 
 export default function CartScreen() {
   const router = useRouter();
-  const { cartItems, removeFromCart, addToCart } = useCart();
+  const { cartItems, removeFromCart, addToCart, subTotal, refreshCart } = useCart();
   const [promoCode, setPromoCode] = useState('');
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshCart();
+    }, [refreshCart])
+  );
   
   useFonts({
     Raleway_600SemiBold,
@@ -63,21 +69,9 @@ export default function CartScreen() {
   };
 
   // Compute live billing calculations
-  const subtotal = useMemo(() => {
-    return cartItems.reduce(
-      (sum, item) => sum + parsePrice(item.product.price) * item.quantity,
-      0
-    );
-  }, [cartItems]);
-
-  const tax = useMemo(() => {
-    // 8% tax matching layout ratios
-    return subtotal * 0.08;
-  }, [subtotal]);
-
-  const total = useMemo(() => {
-    return subtotal + tax;
-  }, [subtotal, tax]);
+  const subtotal = subTotal;
+  const tax = subtotal * 0.08;
+  const total = subtotal + tax;
 
   // Adjust item count label (e.g. "3 items")
   const totalItemsCount = useMemo(() => {
@@ -85,16 +79,31 @@ export default function CartScreen() {
   }, [cartItems]);
 
   // Quantity control triggers
-  const handleIncrement = (item: typeof cartItems[0]) => {
-    addToCart(item.product, 1);
+  const handleIncrement = async (item: typeof cartItems[0]) => {
+    try {
+      await addToCart(item.product, 1);
+    } catch (err: any) {
+      Alert.alert('Cart Error', err.message || 'Failed to update quantity.');
+    }
   };
 
-  const handleDecrement = (item: typeof cartItems[0]) => {
-    if (item.quantity > 1) {
-      addToCart(item.product, -1);
-    } else {
-      // Prompt user or simply delete
-      removeFromCart(item.product.id);
+  const handleDecrement = async (item: typeof cartItems[0]) => {
+    try {
+      if (item.quantity > 1) {
+        await addToCart(item.product, -1);
+      } else {
+        await removeFromCart(item.id);
+      }
+    } catch (err: any) {
+      Alert.alert('Cart Error', err.message || 'Failed to update quantity.');
+    }
+  };
+
+  const handleRemove = async (itemId: string) => {
+    try {
+      await removeFromCart(itemId);
+    } catch (err: any) {
+      Alert.alert('Cart Error', err.message || 'Failed to remove item.');
     }
   };
 
@@ -148,8 +157,8 @@ export default function CartScreen() {
               {/* Product Cards List */}
               <View style={styles.cardsList}>
                 {cartItems.map((item) => {
-                  const itemPriceParsed = parsePrice(item.product.price);
-                  const itemTotal = itemPriceParsed * item.quantity;
+                  const itemPriceParsed = item.unitPrice;
+                  const itemTotal = item.subTotal;
                   const itemHasDollar = checkHasDollar(item.product.price);
 
                   return (
@@ -157,7 +166,7 @@ export default function CartScreen() {
                       {/* Product Image */}
                       <View style={styles.imageWrap}>
                         <Image
-                          source={typeof item.product.image === 'number' ? item.product.image : { uri: item.product.image }}
+                          source={item.product.image}
                           style={styles.productImage}
                           contentFit="cover"
                           transition={200}
@@ -171,7 +180,7 @@ export default function CartScreen() {
                             {item.product.name}
                           </Text>
                           <Pressable
-                            onPress={() => removeFromCart(item.product.id)}
+                            onPress={() => handleRemove(item.id)}
                             style={styles.removeButton}
                             hitSlop={8}
                           >

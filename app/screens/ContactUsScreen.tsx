@@ -7,10 +7,9 @@ import {
 } from '@expo-google-fonts/manrope';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
     KeyboardAvoidingView,
-    Linking,
     Platform,
     Pressable,
     SafeAreaView,
@@ -24,22 +23,42 @@ import {
 import { footerNavItems } from '@/app/data/home';
 import { HomeFooter } from '@/components/home/HomeFooter';
 import { HOME_HORIZONTAL_PADDING } from '@/components/home/layout';
+import { ApiService } from '@/app/services/apiService';
+import { TokenService } from '@/app/services/tokenService';
+import FeedbackModal from '@/components/FeedbackModal';
 
 export const options = { headerShown: false };
 
 const GOLD = '#C9922A';
 
 // ─── Contact channels ─────────────────────────────────────────────────────────
-const CHANNELS = [
-  { id: 'phone', label: 'Call Us', value: '+234 800 000 0000', icon: 'call-outline' as const, action: () => Linking.openURL('tel:+2348000000000') },
-  { id: 'email', label: 'Email Us', value: 'support@tbm.com', icon: 'mail-outline' as const, action: () => Linking.openURL('mailto:support@tbm.com') },
-  { id: 'whatsapp', label: 'WhatsApp', value: '+234 800 000 0000', icon: 'logo-whatsapp' as const, action: () => Linking.openURL('https://wa.me/2348000000000') },
-];
+
 
 export default function ContactUsScreen() {
   const router = useRouter();
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [feedbackVisible, setFeedbackVisible] = useState(false);
+  const [feedbackType, setFeedbackType] = useState<'success' | 'error'>('success');
+  const [feedbackTitle, setFeedbackTitle] = useState('');
+  const [feedbackMessage, setFeedbackMessage] = useState('');
+
+  // Load stored user info to pre‑fill the form
+  useEffect(() => {
+    (async () => {
+      const user = await TokenService.getUser();
+      if (user) {
+        const name = user.fullName || `${user.firstName || ''} ${user.lastName || ''}`.trim();
+        setFullName(name);
+        setEmail(user.email || '');
+        setPhoneNumber(user.phoneNumber || '');
+      }
+    })();
+  }, []);
 
   const [fontsLoaded] = useFonts({
     Manrope_400Regular,
@@ -56,6 +75,32 @@ export default function ContactUsScreen() {
     if (itemId === 'favorite') router.push('/screens/FavoriteScreen');
     if (itemId === 'profile') router.push('/screens/ProfileScreen');
   };
+
+const handleSend = async () => {
+  if (!fullName || !email || !phoneNumber || !subject || !message) {
+    setFeedbackType('error');
+    setFeedbackTitle('Missing Information');
+    setFeedbackMessage('Please fill in all fields.');
+    setFeedbackVisible(true);
+    return;
+  }
+  setIsSubmitting(true);
+  try {
+    await ApiService.contactUs({ fullName, email, phoneNumber, subject, message });
+    setFeedbackType('success');
+    setFeedbackTitle('Message Sent');
+    setFeedbackMessage('Your message has been sent successfully.');
+    setFeedbackVisible(true);
+  } catch (err: any) {
+    const msg = err?.message ?? 'An unexpected error occurred.';
+    setFeedbackType('error');
+    setFeedbackTitle('Error');
+    setFeedbackMessage(msg);
+    setFeedbackVisible(true);
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -81,33 +126,7 @@ export default function ContactUsScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* ── Contact channels ── */}
-          <Text style={styles.sectionLabel} allowFontScaling={false}>
-            Reach Us Directly
-          </Text>
 
-          <View style={styles.channels}>
-            {CHANNELS.map(ch => (
-              <Pressable
-                key={ch.id}
-                onPress={ch.action}
-                style={({ pressed }) => [styles.channelRow, pressed && styles.pressed]}
-              >
-                <View style={styles.channelIcon}>
-                  <Ionicons name={ch.icon} size={20} color={GOLD} />
-                </View>
-                <View style={styles.channelInfo}>
-                  <Text style={styles.channelLabel} allowFontScaling={false}>
-                    {ch.label}
-                  </Text>
-                  <Text style={styles.channelValue} allowFontScaling={false}>
-                    {ch.value}
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.35)" />
-              </Pressable>
-            ))}
-          </View>
 
           {/* ── Message form ── */}
           <Text style={styles.sectionLabel} allowFontScaling={false}>
@@ -115,6 +134,42 @@ export default function ContactUsScreen() {
           </Text>
 
           <View style={styles.form}>
+            <View style={styles.fieldWrapper}>
+              <Text style={styles.fieldLabel} allowFontScaling={false}>Full Name</Text>
+              <TextInput
+                value={fullName}
+                onChangeText={setFullName}
+                placeholder="Your full name"
+                placeholderTextColor="rgba(255,255,255,0.35)"
+                style={styles.input}
+                allowFontScaling={false}
+              />
+            </View>
+            <View style={styles.fieldWrapper}>
+              <Text style={styles.fieldLabel} allowFontScaling={false}>Email</Text>
+              <TextInput
+                value={email}
+                onChangeText={setEmail}
+                placeholder="you@example.com"
+                placeholderTextColor="rgba(255,255,255,0.35)"
+                style={styles.input}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                allowFontScaling={false}
+              />
+            </View>
+            <View style={styles.fieldWrapper}>
+              <Text style={styles.fieldLabel} allowFontScaling={false}>Phone Number</Text>
+              <TextInput
+                value={phoneNumber}
+                onChangeText={setPhoneNumber}
+                placeholder="+234 800 000 0000"
+                placeholderTextColor="rgba(255,255,255,0.35)"
+                style={styles.input}
+                keyboardType="phone-pad"
+                allowFontScaling={false}
+              />
+            </View>
             <View style={styles.fieldWrapper}>
               <Text style={styles.fieldLabel} allowFontScaling={false}>Subject</Text>
               <TextInput
@@ -142,12 +197,9 @@ export default function ContactUsScreen() {
               />
             </View>
 
-            <Pressable
-              onPress={() => router.back()}
-              style={({ pressed }) => [styles.sendButton, pressed && styles.pressed]}
-            >
+            <Pressable onPress={handleSend} style={styles.sendButton} disabled={isSubmitting}>
               <Text style={styles.sendButtonText} allowFontScaling={false}>
-                Send Message
+                {isSubmitting ? 'Sending...' : 'Send Message'}
               </Text>
             </Pressable>
           </View>
@@ -157,6 +209,16 @@ export default function ContactUsScreen() {
           items={footerNavItems}
           activeItemId="profile"
           onSelectItem={handleFooterSelect}
+        />
+        <FeedbackModal
+          visible={feedbackVisible}
+          type={feedbackType}
+          title={feedbackTitle}
+          message={feedbackMessage}
+          onClose={() => {
+            setFeedbackVisible(false);
+            if (feedbackType === 'success') router.back();
+          }}
         />
       </KeyboardAvoidingView>
     </SafeAreaView>

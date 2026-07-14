@@ -10,7 +10,10 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
+import { ApiService } from '../services/apiService';
+import { TokenService } from '../services/tokenService';
 import {
+    ActivityIndicator,
     Dimensions,
     KeyboardAvoidingView,
     Platform,
@@ -22,6 +25,7 @@ import {
     TextInput,
     View,
 } from 'react-native';
+import FeedbackModal from '@/components/FeedbackModal';
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -33,6 +37,61 @@ const GOLD = '#C9922A';
 export default function LoginScreen() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
+
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  // Modal State
+  const [modalVisible, setModalVisible] = useState(false);
+  const [modalConfig, setModalConfig] = useState<{
+    type: 'success' | 'error' | 'info';
+    title: string;
+    message: string;
+    onClose?: () => void;
+  }>({
+    type: 'info',
+    title: '',
+    message: '',
+  });
+
+  const showFeedback = (type: 'success' | 'error' | 'info', title: string, message: string, onClose?: () => void) => {
+    setModalConfig({ type, title, message, onClose });
+    setModalVisible(true);
+  };
+
+  const handleLogin = async () => {
+    if (!email.trim() || !password.trim()) {
+      showFeedback('error', 'Validation Error', 'All fields are required.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const response = await ApiService.login({
+        email: email.trim(),
+        password,
+      });
+
+      if (response.success && response.data) {
+        const { accessToken, refreshToken, user } = response.data;
+        if (accessToken && refreshToken) {
+          await TokenService.saveTokens(accessToken, refreshToken);
+        }
+        if (user) {
+          await TokenService.saveUser(user);
+        }
+        showFeedback('success', 'Success', response.message || 'Login successful!', () => {
+          router.replace('/screens/HomeScreen');
+        });
+      } else {
+        showFeedback('error', 'Login Failed', response.message || 'An unknown error occurred.');
+      }
+    } catch (err: any) {
+      showFeedback('error', 'Login Error', err.message || 'An error occurred during login.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const [fontsLoaded] = useFonts({
     Manrope_400Regular,
@@ -66,16 +125,6 @@ export default function LoginScreen() {
           style={styles.gradient}
         />
 
-        {/* ── Brand — top center ── */}
-        <View style={styles.brand}>
-          <Text style={styles.brandName} allowFontScaling={false}>
-            Z I O R A
-          </Text>
-          <Text style={styles.brandTagline} allowFontScaling={false}>
-            AI VISUALIZER &amp; ESTIMATES
-          </Text>
-        </View>
-
         {/* ── Body ── */}
         <KeyboardAvoidingView
           style={styles.keyboardView}
@@ -87,6 +136,21 @@ export default function LoginScreen() {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
+            {/* ── Brand — center inside scroll ── */}
+            <View style={styles.brand}>
+              <Image
+                source={require('@/assets/images/logo.png')}
+                style={styles.tbmLogo}
+                contentFit="contain"
+              />
+              <Text style={styles.brandName} allowFontScaling={false}>
+                Z I O R A ( B O G A T )
+              </Text>
+              <Text style={styles.brandTagline} allowFontScaling={false}>
+                AI VISUALIZER &amp; ESTIMATES
+              </Text>
+            </View>
+
             <View style={styles.form}>
 
               {/* Title */}
@@ -106,6 +170,9 @@ export default function LoginScreen() {
                 autoCapitalize="none"
                 autoCorrect={false}
                 allowFontScaling={false}
+                value={email}
+                onChangeText={setEmail}
+                editable={!loading}
               />
 
               {/* Password */}
@@ -116,11 +183,15 @@ export default function LoginScreen() {
                   placeholderTextColor="rgba(255,255,255,0.35)"
                   secureTextEntry={!showPassword}
                   allowFontScaling={false}
+                  value={password}
+                  onChangeText={setPassword}
+                  editable={!loading}
                 />
                 <Pressable
                   onPress={() => setShowPassword(p => !p)}
                   style={styles.eyeButton}
                   hitSlop={8}
+                  disabled={loading}
                 >
                   <Ionicons
                     name={showPassword ? 'eye-outline' : 'eye-off-outline'}
@@ -135,6 +206,7 @@ export default function LoginScreen() {
                 onPress={() => router.replace('/screens/ForgotPasswordScreen')}
                 style={styles.forgotRow}
                 hitSlop={8}
+                disabled={loading}
               >
                 <Text style={styles.forgotText} allowFontScaling={false}>
                   Forgot Password?
@@ -143,12 +215,21 @@ export default function LoginScreen() {
 
               {/* Login button */}
               <Pressable
-                onPress={() => router.replace('/screens/HomeScreen')}
-                style={({ pressed }) => [styles.loginButton, pressed && styles.pressed]}
+                onPress={handleLogin}
+                disabled={loading}
+                style={({ pressed }) => [
+                  styles.loginButton,
+                  pressed && styles.pressed,
+                  loading && { opacity: 0.7 }
+                ]}
               >
-                <Text style={styles.loginButtonText} allowFontScaling={false}>
-                  Login
-                </Text>
+                {loading ? (
+                  <ActivityIndicator color="#000000" />
+                ) : (
+                  <Text style={styles.loginButtonText} allowFontScaling={false}>
+                    Login
+                  </Text>
+                )}
               </Pressable>
 
               {/* Divider */}
@@ -168,6 +249,18 @@ export default function LoginScreen() {
           </ScrollView>
         </KeyboardAvoidingView>
       </View>
+      <FeedbackModal
+        visible={modalVisible}
+        type={modalConfig.type}
+        title={modalConfig.title}
+        message={modalConfig.message}
+        onClose={() => {
+          setModalVisible(false);
+          if (modalConfig.onClose) {
+            modalConfig.onClose();
+          }
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -201,18 +294,21 @@ const styles = StyleSheet.create({
 
   // ── Brand ────────────────────────────────────────────────────────────────────
   brand: {
-    position: 'absolute',
-    top: 56,
-    left: 0,
-    right: 0,
     alignItems: 'center',
+    // marginTop: 55,
+    marginBottom: 70,
+  },
+  tbmLogo: {
+    width: 60,
+    height: 60,
+    marginBottom: 10,
   },
   brandName: {
     color: GOLD,
     fontFamily: 'Manrope_500Medium',
-    fontSize: 28,
-    letterSpacing: 6,
-    lineHeight: 34,
+    fontSize: 20,
+    letterSpacing: 4,
+    lineHeight: 26,
   },
   brandTagline: {
     color: '#FFFFFF',

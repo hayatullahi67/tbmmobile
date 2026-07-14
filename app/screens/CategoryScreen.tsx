@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
+    ActivityIndicator,
     Pressable,
     SafeAreaView,
     ScrollView,
@@ -13,10 +14,9 @@ import {
 
 import {
     footerNavItems,
-    homeCategories,
     HomeProduct,
-    latestReleaseProducts,
 } from '@/app/data/home';
+import { ApiService } from '@/app/services/apiService';
 import { useFavorites } from '@/components/home/FavoritesContext';
 import { HomeFooter } from '@/components/home/HomeFooter';
 import { HOME_HORIZONTAL_PADDING } from '@/components/home/layout';
@@ -32,13 +32,79 @@ export default function CategoryScreen() {
   const { width: windowWidth } = useWindowDimensions();
   const { isFavorite, toggleFavorite } = useFavorites();
 
-  const selectedCategory = useMemo(
-    () => homeCategories.find(category => category.id === categoryId) ?? homeCategories[0],
-    [categoryId]
-  );
-  const title = selectedCategory.label.replace(/s$/, '');
+  const [categoryName, setCategoryName] = useState('Category');
+  const [products, setProducts] = useState<HomeProduct[]>([]);
+  const [loading, setLoading] = useState(true);
+
   const footerItems = useMemo(() => footerNavItems, []);
-  const products = useMemo(() => latestReleaseProducts, []);
+
+  useEffect(() => {
+    let active = true;
+    if (!categoryId) {
+      setLoading(false);
+      return;
+    }
+
+    const mapApiProduct = (item: any): HomeProduct => {
+      return {
+        id: item.id,
+        name: item.name,
+        price: item.priceDisplay || (item.price != null ? `₦${Number(item.price).toLocaleString()}` : 'Request Price'),
+        image: { uri: item.primaryImageUrl || 'https://via.placeholder.com/300/252523/ffffff?text=No+Image' },
+        description: item.description || item.shortDescription || 'No description available.',
+        review: 'Highly recommended by verified buyers for build quality.',
+        availability: item.inStock ? 'In stock - Limited units available' : 'Out of stock',
+        delivery: '15 days after payment confirmation',
+        colors: item.color ? [item.color] : ['#C9922A', '#E8E8E8', '#1A1A1A'],
+      };
+    };
+
+    const loadCategoryData = async () => {
+      try {
+        setLoading(true);
+        const [categoryRes, productsRes] = await Promise.all([
+          ApiService.getCategoryById(categoryId),
+          ApiService.getProductsByCategoryId(categoryId),
+        ]);
+
+        if (!active) return;
+
+        if (categoryRes.success && categoryRes.data) {
+          setCategoryName(categoryRes.data.name || 'Category');
+        }
+
+        let rawProducts: any[] = [];
+        if (productsRes.success && productsRes.data) {
+          if (Array.isArray(productsRes.data)) {
+            rawProducts = productsRes.data;
+          } else if (productsRes.data && Array.isArray(productsRes.data.items)) {
+            rawProducts = productsRes.data.items;
+          }
+        }
+
+        const mappedProducts = rawProducts.map(mapApiProduct);
+
+        // Cache mapped products for Details Screen lookup
+        ApiService.cacheProducts(mappedProducts);
+
+        setProducts(mappedProducts);
+      } catch (error) {
+        console.error('Error loading category data:', error);
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadCategoryData();
+
+    return () => {
+      active = false;
+    };
+  }, [categoryId]);
+
+  const title = categoryName;
 
   const gridGap = 12;
   const availableWidth = windowWidth - HOME_HORIZONTAL_PADDING * 2;
@@ -69,6 +135,14 @@ export default function CategoryScreen() {
     });
   };
 
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.safeArea, styles.loadingContainer]}>
+        <ActivityIndicator size="large" color="#C9922A" />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.page}>
@@ -97,18 +171,26 @@ export default function CategoryScreen() {
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.grid}>
-            {products.map(product => (
-              <ProductCard
-                key={product.id}
-                product={product}
-                width={cardWidth}
-                isFavorite={isFavorite(product.id)}
-                onPress={handleProductPress}
-                onFavoritePress={() => toggleFavorite(product.id)}
-              />
-            ))}
-          </View>
+          {products.length === 0 ? (
+            <View style={styles.noProductsContainer}>
+              <Text style={styles.noProductsText} allowFontScaling={false}>
+                No products found in this category
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.grid}>
+              {products.map(product => (
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  width={cardWidth}
+                  isFavorite={isFavorite(product.id)}
+                  onPress={handleProductPress}
+                  onFavoritePress={() => toggleFavorite(product.id)}
+                />
+              ))}
+            </View>
+          )}
         </ScrollView>
 
         <HomeFooter
@@ -183,5 +265,22 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'space-between',
     rowGap: 16,
+  },
+  loadingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  noProductsContainer: {
+    flex: 1,
+    paddingVertical: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noProductsText: {
+    color: '#8A8A8F',
+    fontFamily: 'Manrope',
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
   },
 });

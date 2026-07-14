@@ -30,8 +30,13 @@ export default function ZioraScreen() {
         />
 
         <View style={styles.brand}>
+          <Image
+            source={require('@/assets/images/logo.png')}
+            style={styles.tbmLogo}
+            contentFit="contain"
+          />
           <Text style={styles.logo} allowFontScaling={false}>
-            Z I O R A
+            Z I O R A ( B O G A T )
           </Text>
           <Text style={styles.tagline} allowFontScaling={false}>
             AI VISUALIZER & ESTIMATES
@@ -108,18 +113,23 @@ const styles = StyleSheet.create({
   },
   brand: {
     position: 'absolute',
-    top: 107,
+    top: 130,
     left: 0,
     right: 0,
     alignItems: 'center',
   },
+  tbmLogo: {
+    width: 60,
+    height: 60,
+    marginBottom: 10,
+  },
   logo: {
     color: '#D4AF37',
     fontFamily: 'Manrope',
-    fontSize: 36,
+    fontSize: 22,
     fontWeight: '500',
-    letterSpacing: 0,
-    lineHeight: 40,
+    letterSpacing: 2,
+    lineHeight: 26,
   },
   tagline: {
     color: '#FFFFFF',

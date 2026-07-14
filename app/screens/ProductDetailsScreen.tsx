@@ -3,15 +3,18 @@ import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import {
-    Pressable,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
 
-import { latestReleaseProducts } from '@/app/data/home';
+import { HomeProduct, latestReleaseProducts } from '@/app/data/home';
+import { ApiService } from '@/app/services/apiService';
 import { useCart } from '@/components/home/CartContext';
 import { useFavorites } from '@/components/home/FavoritesContext';
 import { HOME_HORIZONTAL_PADDING } from '@/components/home/layout';
@@ -27,9 +30,10 @@ export default function ProductDetailsScreen() {
   const { isFavorite, toggleFavorite } = useFavorites();
   const [activeTab, setActiveTab] = useState<'description' | 'reviews'>('description');
   const [quantity, setQuantity] = useState(1);
+  const [addingToCart, setAddingToCart] = useState(false);
 
-  const product = useMemo(
-    () => latestReleaseProducts.find(item => item.id === productId) ?? latestReleaseProducts[0],
+  const product = useMemo<HomeProduct>(
+    () => (ApiService.getProductFromCache(productId || '') as HomeProduct | null) ?? latestReleaseProducts.find(item => item.id === productId) ?? latestReleaseProducts[0],
     [productId]
   );
 
@@ -41,9 +45,16 @@ export default function ProductDetailsScreen() {
   const increaseQuantity = () => {
     setQuantity(currentQuantity => currentQuantity + 1);
   };
-  const handleAddToCart = () => {
-    addToCart(product, quantity);
-    router.push('/screens/CartScreen');
+  const handleAddToCart = async () => {
+    try {
+      setAddingToCart(true);
+      await addToCart(product, quantity);
+      router.push('/screens/CartScreen');
+    } catch (err: any) {
+      Alert.alert('Cart Error', err.message || 'Failed to add item to cart.');
+    } finally {
+      setAddingToCart(false);
+    }
   };
 
   return (
@@ -55,7 +66,7 @@ export default function ProductDetailsScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.hero}>
-            <Image source={product.image} style={styles.heroImage}  />
+            <Image source={product.image} style={styles.heroImage} />
             {/* <View style={styles.heroOverlay} /> */}
             <Pressable
               onPress={() => router.back()}
@@ -116,7 +127,7 @@ export default function ProductDetailsScreen() {
                 </View>
               </View>
             </View>
-
+ 
             <View style={styles.tabs}>
               <Pressable
                 onPress={() => setActiveTab('description')}
@@ -175,11 +186,16 @@ export default function ProductDetailsScreen() {
         <View style={styles.bottomBar}>
           <Pressable
             onPress={handleAddToCart}
+            disabled={addingToCart}
             style={({ pressed }) => [styles.addButton, pressed && styles.pressed]}
           >
-            <Text style={styles.addButtonText} allowFontScaling={false}>
-              Add to Cart
-            </Text>
+            {addingToCart ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <Text style={styles.addButtonText} allowFontScaling={false}>
+                Add to Cart
+              </Text>
+            )}
           </Pressable>
         </View>
       </View>
@@ -314,7 +330,7 @@ const styles = StyleSheet.create({
   },
   activeTabButton: {
     backgroundColor: '#C9922A',
-    width:106,
+    width: 106,
   },
   tabText: {
     color: '#FFFFFF',
@@ -368,8 +384,8 @@ const styles = StyleSheet.create({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-     zIndex: 9,
-     elevation: 9,
+    zIndex: 9,
+    elevation: 9,
   },
   addButton: {
     height: 43,
@@ -377,7 +393,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#C9922A',
     alignItems: 'center',
     justifyContent: 'center',
-    width:235,
+    width: 235,
   },
   addButtonText: {
     color: '#FFFFFF',
