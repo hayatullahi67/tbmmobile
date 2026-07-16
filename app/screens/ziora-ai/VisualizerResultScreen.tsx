@@ -4,6 +4,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
+import { ApiService } from '@/app/services/apiService';
 import {
   ActivityIndicator,
   Dimensions,
@@ -19,192 +20,51 @@ import {
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-const DESIGN_STYLES = [
-  { id: 'Modern', name: 'Modern', image: require('@/assets/ziora/living_modern.png') },
-  { id: 'Minimalism', name: 'Minimalism', image: require('@/assets/ziora/living_minimalism.png') },
-  { id: 'Wabi-sabi', name: 'Wabi-sabi', image: require('@/assets/ziora/living_wabisabi.png') },
-  { id: 'Tropical', name: 'Tropical', image: require('@/assets/ziora/living_tropical.png') },
-  { id: 'Farmhouse', name: 'Farmhouse', image: require('@/assets/ziora/living_farmhouse.png') },
-  // { id: 'Memphis', name: 'Memphis', image: require('@/assets/ziora/living_memphis.png') },
+const STATIC_STYLES = [
+  { id: 'modern', name: 'Modern' },
+  { id: 'minimalist', name: 'Minimalism' },
+  { id: 'wabi-sabi', name: 'Wabi-Sabi' },
+  { id: 'tropical', name: 'Tropical' },
+  { id: 'farmhouse', name: 'Farmhouse' },
+  { id: 'memphis', name: 'Memphis' },
+  { id: 'afro-minimalism', name: 'Afro-Minimalism' },
+  { id: 'contemporary-african', name: 'Contemporary African' },
+  { id: 'industrial', name: 'Industrial' },
+  { id: 'bohemian', name: 'Bohemian' },
 ];
+
+function getStyleImage(styleId: string) {
+  const normalized = styleId.toLowerCase();
+  switch (normalized) {
+    case 'modern':
+      return require('@/assets/ziora/living_modern.png');
+    case 'minimalist':
+    case 'minimalism':
+      return require('@/assets/ziora/living_minimalism.png');
+    case 'wabi-sabi':
+    case 'wabisabi':
+      return require('@/assets/ziora/living_wabisabi.png');
+    case 'tropical':
+      return require('@/assets/ziora/living_tropical.png');
+    case 'farmhouse':
+      return require('@/assets/ziora/living_farmhouse.png');
+    case 'memphis':
+      return require('@/assets/ziora/living_memphis.png');
+    case 'afro-minimalism':
+      return require('@/assets/ziora/living_minimalism.png');
+    case 'contemporary-african':
+      return require('@/assets/ziora/living_modern.png');
+    case 'industrial':
+      return require('@/assets/ziora/living_minimalism.png');
+    case 'bohemian':
+      return require('@/assets/ziora/living_tropical.png');
+    default:
+      return require('@/assets/ziora/living_modern.png');
+  }
+}
 
 export const options = {
   headerShown: false,
-};
-
-const getFallbackDesignData = (userPrompt: string) => {
-  const query = userPrompt.toLowerCase();
-  let category = 'living';
-  if (query.includes('kitchen')) category = 'kitchen';
-  else if (query.includes('bedroom') || query.includes('bed')) category = 'bedroom';
-  else if (query.includes('toilet') || query.includes('bathroom') || query.includes('wc') || query.includes('restroom') || query.includes('toiletg')) category = 'bathroom';
-  else if (query.includes('parlor') || query.includes('parlour') || query.includes('living') || query.includes('sitting')) category = 'living';
-
-  const datasets: Record<string, any> = {
-    kitchen: {
-      Modern: {
-        imageAsset: require('@/assets/ziora/kitchen_modern.png'),
-        matchedProducts: [
-          { productId: 'kit-mod-1', name: 'Polished Carrara Quartz Countertop', category: 'Construction Finish', price: 480000, priceDisplay: '₦480,000.00', imageUrl: 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=150' },
-          { productId: 'kit-mod-2', name: 'Gold Halo Ring Pendant Lights', category: 'Lighting', price: 95000, priceDisplay: '₦95,000.00', imageUrl: 'https://images.unsplash.com/photo-1507473885765-e6ed057f782c?w=150' }
-        ]
-      },
-      Minimalism: {
-        imageAsset: require('@/assets/ziora/kitchen_minimalism.png'),
-        matchedProducts: [
-          { productId: 'kit-min-1', name: 'Concealed Handleless Cabinetry', category: 'Cabinetry', price: 1200000, priceDisplay: '₦1,200,000.00', imageUrl: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=150' },
-          { productId: 'kit-min-2', name: 'Seamless Integrated Induction Hob', category: 'Appliances', price: 850000, priceDisplay: '₦850,000.00', imageUrl: 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=150' }
-        ]
-      },
-      'Wabi-sabi': {
-        imageAsset: require('@/assets/ziora/kitchen_wabisabi.png'),
-        matchedProducts: [
-          { productId: 'kit-wab-1', name: 'Live-Edge Solid Iroko Island Countertop', category: 'Timber Finish', price: 720000, priceDisplay: '₦720,000.00', imageUrl: 'https://images.unsplash.com/photo-1618220179428-22790b461013?w=150' },
-          { productId: 'kit-wab-2', name: 'Clay Pendant Lamp (Handcrafted)', category: 'Lighting', price: 48000, priceDisplay: '₦48,000.00', imageUrl: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?w=150' }
-        ]
-      },
-      Tropical: {
-        imageAsset: require('@/assets/ziora/kitchen_tropical.png'),
-        matchedProducts: [
-          { productId: 'kit-trop-1', name: 'Woven Rattan Ceiling Pendant', category: 'Lighting', price: 35000, priceDisplay: '₦35,000.00', imageUrl: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?w=150' },
-          { productId: 'kit-trop-2', name: 'Verde Bamboo Marble Accent Slab', category: 'Construction Finish', price: 540000, priceDisplay: '₦540,000.00', imageUrl: 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=150' }
-        ]
-      },
-      Farmhouse: {
-        imageAsset: require('@/assets/ziora/kitchen_farmhouse.png'),
-        matchedProducts: [
-          { productId: 'kit-farm-1', name: 'Ceramic Apron-Front Sink', category: 'Kitchen Fixture', price: 290000, priceDisplay: '₦290,000.00', imageUrl: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=150' },
-          { productId: 'kit-farm-2', name: 'Solid Oak Butcher Block Island Top', category: 'Timber Finish', price: 360000, priceDisplay: '₦360,000.00', imageUrl: 'https://images.unsplash.com/photo-1600566752355-35792bedcfea?w=150' }
-        ]
-      },
-      Memphis: {
-        imageAsset: require('@/assets/ziora/kitchen_memphis.png'),
-        matchedProducts: [
-          { productId: 'kit-mem-1', name: 'Confetti Terrazzo Tile Flooring', category: 'Flooring', price: 150000, priceDisplay: '₦150,000.00', imageUrl: 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=150' },
-          { productId: 'kit-mem-2', name: 'Pastel Geometric Cabinet Hardware', category: 'Hardware', price: 14000, priceDisplay: '₦14,000.00', imageUrl: 'https://images.unsplash.com/photo-1507473885765-e6ed057f782c?w=150' }
-        ]
-      }
-    },
-    bedroom: {
-      Modern: {
-        imageAsset: require('@/assets/images/welcomebg.png'),
-        matchedProducts: [
-          { productId: 'bed-mod-1', name: 'Upholstered Velvet Accent Headboard', category: 'Furniture Finish', price: 380000, priceDisplay: '₦380,000.00', imageUrl: 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=150' }
-        ]
-      },
-      Minimalism: {
-        imageAsset: require('@/assets/images/product1.jpeg'),
-        matchedProducts: [
-          { productId: 'bed-min-1', name: 'Low Profile Oak Bed Frame', category: 'Furniture', price: 450000, priceDisplay: '₦450,000.00', imageUrl: 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=150' }
-        ]
-      },
-      'Wabi-sabi': {
-        imageAsset: require('@/assets/images/product4.jpeg'),
-        matchedProducts: [
-          { productId: 'bed-wab-1', name: 'Bogat Raw Textured Wall Screed', category: 'Paints', price: 82000, priceDisplay: '₦82,000.00', imageUrl: 'https://images.unsplash.com/photo-1618220179428-22790b461013?w=150' }
-        ]
-      },
-      Tropical: {
-        imageAsset: require('@/assets/images/product6.jpeg'),
-        matchedProducts: [
-          { productId: 'bed-trop-1', name: 'Teak Canopy Bedroom Post', category: 'Timber Finish', price: 580000, priceDisplay: '₦580,000.00', imageUrl: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?w=150' }
-        ]
-      },
-      Farmhouse: {
-        imageAsset: require('@/assets/images/product8.jpeg'),
-        matchedProducts: [
-          { productId: 'bed-farm-1', name: 'Solid Timber Sliding Barn Door', category: 'Doors', price: 290000, priceDisplay: '₦290,000.00', imageUrl: 'https://images.unsplash.com/photo-1600566752355-35792bedcfea?w=150' }
-        ]
-      },
-      Memphis: {
-        imageAsset: require('@/assets/images/product10.jpeg'),
-        matchedProducts: [
-          { productId: 'bed-mem-1', name: 'Abstract Pastel Geometric Rug', category: 'Flooring', price: 180000, priceDisplay: '₦180,000.00', imageUrl: 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=150' }
-        ]
-      }
-    },
-    bathroom: {
-      Modern: {
-        imageAsset: require('@/assets/ziora/bathroom_modern.png'),
-        matchedProducts: [
-          { productId: 'bath-mod-1', name: 'Frameless Backlit LED Mirror', category: 'Bath Fixtures', price: 125000, priceDisplay: '₦125,000.00', imageUrl: 'https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?w=150' },
-          { productId: 'bath-mod-2', name: 'Black Matte Rainfall Shower Set', category: 'Plumbing', price: 220000, priceDisplay: '₦220,000.00', imageUrl: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=150' }
-        ]
-      },
-      Minimalism: {
-        imageAsset: require('@/assets/ziora/bathroom_minimalism.png'),
-        matchedProducts: [
-          { productId: 'bath-min-1', name: 'Seamless Microcement Wall Finish', category: 'Paints', price: 280000, priceDisplay: '₦280,000.00', imageUrl: 'https://images.unsplash.com/photo-1604014237800-1c9102c219da?w=150' }
-        ]
-      },
-      'Wabi-sabi': {
-        imageAsset: require('@/assets/ziora/bathroom_wabisabi.png'),
-        matchedProducts: [
-          { productId: 'bath-wab-1', name: 'Natural Stone Carved Pedestal Basin', category: 'Bath Fixtures', price: 450000, priceDisplay: '₦450,000.00', imageUrl: 'https://images.unsplash.com/photo-1507652313519-d4e9174996dd?w=150' }
-        ]
-      },
-      Tropical: {
-        imageAsset: require('@/assets/ziora/bathroom_tropical.png'),
-        matchedProducts: [
-          { productId: 'bath-trop-1', name: 'Teak Wood Slatted Shower Floor', category: 'Construction Finish', price: 95000, priceDisplay: '₦95,000.00', imageUrl: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=150' }
-        ]
-      },
-      Farmhouse: {
-        imageAsset: require('@/assets/ziora/bathroom_farmhouse.png'),
-        matchedProducts: [
-          { productId: 'bath-farm-1', name: 'Freestanding Clawfoot Soaking Tub', category: 'Bath Fixtures', price: 880000, priceDisplay: '₦880,000.00', imageUrl: 'https://images.unsplash.com/photo-1584622781564-1d987f7333c1?w=150' }
-        ]
-      },
-      Memphis: {
-        imageAsset: require('@/assets/ziora/bathroom_memphis.png'),
-        matchedProducts: [
-          { productId: 'bath-mem-1', name: 'Colorful Terrazzo Vanity Countertop', category: 'Construction Finish', price: 320000, priceDisplay: '₦320,000.00', imageUrl: 'https://images.unsplash.com/photo-1600585154526-990dced4db0d?w=150' }
-        ]
-      }
-    },
-    living: {
-      Modern: {
-        imageAsset: require('@/assets/ziora/living_modern.png'),
-        matchedProducts: [
-          { productId: 'liv-mod-1', name: 'High-Gloss Calacatta Wall Panel', category: 'Walls', price: 650000, priceDisplay: '₦650,000.00', imageUrl: 'https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?w=150' },
-          { productId: 'liv-mod-2', name: 'Smart Recessed Linear LED Strip', category: 'Lighting', price: 42000, priceDisplay: '₦42,000.00', imageUrl: 'https://images.unsplash.com/photo-1507473885765-e6ed057f782c?w=150' }
-        ]
-      },
-      Minimalism: {
-        imageAsset: require('@/assets/ziora/living_minimalism.png'),
-        matchedProducts: [
-          { productId: 'liv-min-1', name: 'Self-leveling Concrete Screed Finish', category: 'Flooring', price: 320000, priceDisplay: '₦320,000.00', imageUrl: 'https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?w=150' }
-        ]
-      },
-      'Wabi-sabi': {
-        imageAsset: require('@/assets/ziora/living_wabisabi.png'),
-        matchedProducts: [
-          { productId: 'liv-wab-1', name: 'Venetian Mineral Plaster Coating', category: 'Paints', price: 78000, priceDisplay: '₦78,000.00', imageUrl: 'https://images.unsplash.com/photo-1618220179428-22790b461013?w=150' }
-        ]
-      },
-      Tropical: {
-        imageAsset: require('@/assets/ziora/living_tropical.png'),
-        matchedProducts: [
-          { productId: 'liv-trop-1', name: 'Hand-woven Rattan Accent Armchair', category: 'Furniture', price: 165000, priceDisplay: '₦165,000.00', imageUrl: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?w=150' }
-        ]
-      },
-      Farmhouse: {
-        imageAsset: require('@/assets/ziora/living_farmhouse.png'),
-        matchedProducts: [
-          { productId: 'liv-farm-1', name: 'Reclaimed Heart-Pine Timber Planks', category: 'Flooring', price: 680000, priceDisplay: '₦680,000.00', imageUrl: 'https://images.unsplash.com/photo-1600566752355-35792bedcfea?w=150' }
-        ]
-      },
-      Memphis: {
-        imageAsset: require('@/assets/ziora/living_memphis.png'),
-        matchedProducts: [
-          { productId: 'liv-mem-1', name: 'Terrazzo Flooring Compound Set', category: 'Flooring', price: 210000, priceDisplay: '₦210,000.00', imageUrl: 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=150' }
-        ]
-      }
-    }
-  };
-
-  const activeDataset = datasets[category] || datasets.living;
-  return activeDataset;
 };
 
 export default function VisualizerResultScreen() {
@@ -226,63 +86,186 @@ export default function VisualizerResultScreen() {
   const projectId = (params.projectId as string) || '692aadf2-4172-485d-9796-84ee98d54479';
   const prompt = (params.prompt as string) || '';
   const inputUrl = (params.inputUrl as string) || '';
-  const imageBase64 = (params.imageBase64 as string) || '';
   const isVideo = params.isVideo === 'true';
 
   const [currentOutputUrl, setCurrentOutputUrl] = useState<any>(null);
   const [isTransforming, setIsTransforming] = useState(false);
   const [selectedStyle, setSelectedStyle] = useState<string>('Modern');
   const [currentMatchedProducts, setCurrentMatchedProducts] = useState<any[]>([]);
+  const [stylesList, setStylesList] = useState<any[]>(STATIC_STYLES);
+  const [loaderMessage, setLoaderMessage] = useState('Ziora is analyzing layout and preparing styles...');
+  const [activeProjectId, setActiveProjectId] = useState<string>(projectId);
+  const [remoteImageUrl, setRemoteImageUrl] = useState<string>('');
 
   const [isLoadingDesign, setIsLoadingDesign] = useState(true);
-  const [designData, setDesignData] = useState<any>(null);
 
   const isFetchingRef = useRef(false);
 
   useEffect(() => {
-    // Instantaneous premium local load
-    const parsed = getFallbackDesignData(prompt);
-    setDesignData(parsed);
+    async function fetchStyles() {
+      try {
+        const res = await ApiService.getAiStyles();
+        if (res.success && res.data && res.data.length > 0) {
+          setStylesList(res.data);
+        }
+      } catch (err) {
+        console.error('Error fetching styles in visualizer:', err);
+      }
+    }
+    fetchStyles();
+  }, []);
 
-    const initialStyle = 'Modern';
-    setSelectedStyle(initialStyle);
-    const selectedKey = Object.keys(parsed || {}).find(
-      k => k.toLowerCase().replace(/[^a-z0-9]/g, '') === initialStyle.toLowerCase().replace(/[^a-z0-9]/g, '')
-    );
-    const selectedData = selectedKey ? parsed[selectedKey] : null;
-    if (selectedData) {
-      setCurrentOutputUrl(selectedData.imageAsset);
-      setCurrentMatchedProducts(selectedData.matchedProducts || []);
+  useEffect(() => {
+    let active = true;
+
+    async function executeRealApiGeneration() {
+      if (isFetchingRef.current) return;
+      isFetchingRef.current = true;
+      setIsLoadingDesign(true);
+
+      const routeStyleId = (params.style as string) || 'modern';
+      const styleObj = stylesList.find(s => s.id.toLowerCase() === routeStyleId.toLowerCase());
+      const displayStyleName = styleObj ? styleObj.name : 'Modern';
+      setSelectedStyle(displayStyleName);
+
+      let currentRemoteUrl = inputUrl;
+      let currentProjectId = projectId;
+
+      try {
+        // 1. Upload local reference image if needed
+        if (inputUrl && (inputUrl.startsWith('file://') || inputUrl.startsWith('/') || inputUrl.startsWith('content://'))) {
+          setLoaderMessage('Ziora is uploading reference image...');
+          const uploadRes = await ApiService.uploadDocument(inputUrl);
+          const uploadedUrl = (uploadRes as any)?.url || (uploadRes as any)?.data?.url;
+          if (uploadedUrl) {
+            currentRemoteUrl = uploadedUrl;
+            if (active) setRemoteImageUrl(uploadedUrl);
+          } else {
+            console.warn('[API] Upload reference image failed, using original uri');
+          }
+        }
+
+        // 2. Create AI project
+        setLoaderMessage('Ziora is creating AI project...');
+        const projectRes = await ApiService.createAIProject({
+          sourceImageUrl: currentRemoteUrl || null,
+          outputType: isVideo ? 2 : 1,
+          generationType: 1,
+          prompt: prompt,
+          contextLabel: 'Renovation Visualizer'
+        });
+
+        if (projectRes.success && projectRes.data) {
+          const resProjId = projectRes.data.id || projectRes.data.projectId;
+          if (resProjId) {
+            currentProjectId = resProjId;
+            if (active) setActiveProjectId(resProjId);
+          }
+        }
+
+        // 3. Trigger generation
+        if (isVideo) {
+          setLoaderMessage('Ziora is generating your video concept...');
+          const genRes = await ApiService.generateAIVideo({
+            projectId: currentProjectId,
+            prompt: prompt,
+            sourceImageUrl: currentRemoteUrl || null,
+            durationSeconds: 5
+          });
+          const outUrl = (genRes as any)?.data?.url || (genRes as any)?.url || (genRes as any)?.data?.videoUrl || (genRes as any)?.videoUrl || (genRes as any)?.data?.outputUrl || (genRes as any)?.outputUrl;
+          if (outUrl && active) {
+            setCurrentOutputUrl(outUrl);
+          }
+        } else {
+          setLoaderMessage('Ziora is generating your image concept...');
+          const genRes = await ApiService.generateAIImage({
+            projectId: currentProjectId,
+            prompt: prompt,
+            sourceImageUrl: currentRemoteUrl || null,
+            style: routeStyleId
+          });
+          const outUrl = (genRes as any)?.data?.url || (genRes as any)?.url || (genRes as any)?.data?.imageUrl || (genRes as any)?.imageUrl || (genRes as any)?.data?.outputUrl || (genRes as any)?.outputUrl;
+          if (outUrl && active) {
+            setLoaderMessage('Ziora is caching design layout...');
+            try {
+              await Image.prefetch(outUrl);
+            } catch (err) {
+              console.warn('[ImagePrefetch] failed:', err);
+            }
+            setCurrentOutputUrl(outUrl);
+          }
+        }
+
+        // 4. Load matched products from real database API
+        const prodRes = await ApiService.getAllProducts(1, 10);
+        if (prodRes.success && prodRes.data && active) {
+          const products = prodRes.data.products || prodRes.data.items || prodRes.data || [];
+          const mappedProducts = products.map((p: any) => ({
+            productId: p.id || p.productId || String(Math.random()),
+            name: p.name || p.title,
+            category: p.categoryName || p.category || 'Renovation Finish',
+            price: p.price || 0,
+            priceDisplay: p.price ? `₦${p.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '₦0.00',
+            imageUrl: p.imageUrl || p.image || 'https://images.unsplash.com/photo-1618220179428-22790b461013?w=150',
+          }));
+          setCurrentMatchedProducts(mappedProducts);
+        }
+
+      } catch (err: any) {
+        console.error('[API] Ziora generation failed:', err);
+        if (active) {
+          showFeedback('error', 'Generation Failed', err?.message || 'Ziora was unable to complete the generation. Please try again.');
+        }
+      } finally {
+        if (active) {
+          setIsLoadingDesign(false);
+          isFetchingRef.current = false;
+        }
+      }
     }
 
-    // Short layout analyzer feedback spinner to look extremely professional
-    const timer = setTimeout(() => {
-      setIsLoadingDesign(false);
-    }, 450);
+    executeRealApiGeneration();
 
-    return () => clearTimeout(timer);
-  }, [prompt]);
+    return () => {
+      active = false;
+    };
+  }, [prompt, params.style, stylesList]);
 
-  const handleStyleTransform = async (styleName: string) => {
-    if (isTransforming || !designData) return;
+  const handleStyleTransform = async (styleId: string, styleName: string) => {
+    if (isTransforming) return;
     setIsTransforming(true);
     setSelectedStyle(styleName);
 
     try {
-      const selectedKey = Object.keys(designData || {}).find(
-        k => k.toLowerCase().replace(/[^a-z0-9]/g, '') === styleName.toLowerCase().replace(/[^a-z0-9]/g, '')
-      );
-      const selectedData = selectedKey ? designData[selectedKey] : null;
-      if (selectedData) {
-        setCurrentOutputUrl(selectedData.imageAsset);
-        setCurrentMatchedProducts(selectedData.matchedProducts || []);
+      // 1. Call real AI generation API to transform style
+      const genRes = await ApiService.generateAIImage({
+        projectId: activeProjectId,
+        prompt: prompt,
+        sourceImageUrl: remoteImageUrl || null,
+        style: styleId
+      });
+
+      const outUrl = (genRes as any)?.data?.url || (genRes as any)?.url || (genRes as any)?.data?.imageUrl || (genRes as any)?.imageUrl || (genRes as any)?.data?.outputUrl || (genRes as any)?.outputUrl;
+      if (outUrl) {
+        try {
+          await Image.prefetch(outUrl);
+        } catch (err) {
+          console.warn('[ImagePrefetch] failed:', err);
+        }
+        setCurrentOutputUrl(outUrl);
       }
-    } catch (err) {
-      console.error('Failed to change style:', err);
+
+    } catch (err: any) {
+      console.error('[API] Ziora style transformation failed:', err);
+      showFeedback('error', 'Transformation Failed', err?.message || 'Ziora was unable to apply this style preset. Please try again.');
     } finally {
       setIsTransforming(false);
     }
   };
+
+  const currentImageSource = currentOutputUrl 
+    ? { uri: currentOutputUrl } 
+    : (inputUrl ? { uri: inputUrl } : require('@/assets/images/visualizer_after.png'));
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -290,7 +273,7 @@ export default function VisualizerResultScreen() {
       <View style={styles.fullScreenContainer}>
         <View style={styles.imageCardContainer}>
           <Image
-            source={currentOutputUrl || require('@/assets/images/visualizer_after.png')}
+            source={currentImageSource}
             style={styles.mainImageCard}
             contentFit="cover"
           />
@@ -325,16 +308,16 @@ export default function VisualizerResultScreen() {
             Select Room Style
           </Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.carouselScroll}>
-            {DESIGN_STYLES.map((style) => {
-              const isActive = selectedStyle === style.id;
+            {stylesList.map((style) => {
+              const isActive = selectedStyle.toLowerCase() === style.name.toLowerCase();
               return (
                 <Pressable
                   key={style.id}
                   style={[styles.styleCard, isActive && styles.styleCardActive]}
-                  onPress={() => handleStyleTransform(style.id)}
+                  onPress={() => handleStyleTransform(style.id, style.name)}
                   disabled={isTransforming}
                 >
-                  <Image source={style.image} style={styles.styleCardImage} contentFit="cover" />
+                  <Image source={getStyleImage(style.id)} style={styles.styleCardImage} contentFit="cover" />
                   <View style={styles.styleCardOverlay}>
                     <Text style={styles.styleCardLabel} allowFontScaling={false}>
                       {style.name}
@@ -422,7 +405,7 @@ export default function VisualizerResultScreen() {
         <View style={styles.loaderOverlay}>
           <ActivityIndicator size="large" color="#C9922A" />
           <Text style={styles.loaderText} allowFontScaling={false}>
-            Ziora is analyzing layout and preparing styles...
+            {loaderMessage}
           </Text>
         </View>
       )}

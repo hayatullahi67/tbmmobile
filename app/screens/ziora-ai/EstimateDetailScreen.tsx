@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   Platform,
   Pressable,
@@ -7,18 +7,17 @@ import {
   StyleSheet,
   Text,
   View,
+  ActivityIndicator,
 } from 'react-native';
 import FeedbackModal from '@/components/FeedbackModal';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   DEFAULT_MATERIAL_SELECTIONS,
-  decodeEstimateInput,
   formatNaira,
-  generateSmartEstimate,
-  getMockEstimateById,
   materialSummary,
 } from '@/app/screens/ziora-ai/mockEstimateData';
+import { ApiService } from '@/app/services/apiService';
 
 export const options = {
   headerShown: false,
@@ -26,12 +25,16 @@ export const options = {
 
 export default function EstimateDetailScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ estimateId?: string; estimateInput?: string }>();
+  const params = useLocalSearchParams<{ estimateId?: string }>();
 
   const [feedbackVisible, setFeedbackVisible] = useState(false);
   const [feedbackType, setFeedbackType] = useState<'success' | 'error' | 'info'>('info');
   const [feedbackTitle, setFeedbackTitle] = useState('');
   const [feedbackMessage, setFeedbackMessage] = useState('');
+
+  const [estimate, setEstimate] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [selectedPlanIndex, setSelectedPlanIndex] = useState<number>(0);
 
   const showFeedback = (type: 'success' | 'error' | 'info', title: string, message: string) => {
     setFeedbackType(type);
@@ -40,28 +43,82 @@ export default function EstimateDetailScreen() {
     setFeedbackVisible(true);
   };
 
-  const estimate = useMemo(() => {
-    const decoded = decodeEstimateInput(params.estimateInput);
-    if (decoded) return generateSmartEstimate(decoded);
-    return getMockEstimateById(params.estimateId) || generateSmartEstimate({
-      id: 'fallback-estimate',
-      projectName: 'New Renovation Estimate',
-      roomType: 'Living Room',
-      lengthMeters: 4.5,
-      widthMeters: 3.8,
-      heightMeters: 2.8,
-      complexity: 'Standard Renovation',
-      materialSelections: DEFAULT_MATERIAL_SELECTIONS,
-      includeFlooring: true,
-      includePainting: true,
-      includeElectrical: true,
-      includePlumbing: false,
-      contingencyPercent: 10,
-      infoScore: 74,
-    });
-  }, [params.estimateId, params.estimateInput]);
+  useEffect(() => {
+    let active = true;
+    async function loadDetails() {
+      if (!params.estimateId) {
+        setIsLoading(false);
+        return;
+      }
+      setIsLoading(true);
+      try {
+        const res = await ApiService.getRenovationEstimateDetails(params.estimateId);
+        const raw = (res as any)?.data || res;
+        if (raw && (raw.id || raw.projectName) && active) {
+          const floorArea = raw.floorArea || (raw.length * raw.width) || 16.0;
+          const wallArea = raw.wallArea || (2 * ((raw.length || 4) + (raw.width || 4)) * (raw.height || 2.8)) || 36.0;
+          
+          const midTotal = ((raw.lowEstimate || 0) + (raw.highEstimate || 0)) / 2;
+          const costLines = raw.costLines || [
+            { label: 'Materials', amount: midTotal * 0.58, note: 'Finishes and selected fixtures' },
+            { label: 'Labour', amount: midTotal * 0.32, note: 'Installation and artisan work' },
+            { label: 'Logistics', amount: midTotal * 0.075, note: 'Delivery and handling' },
+            { label: 'Contingency', amount: midTotal * 0.025, note: 'Project buffer' },
+          ];
+
+          const paymentSchedule = raw.paymentSchedule || [
+            { label: 'Mobilization', amount: midTotal * 0.4, note: 'Due after approved quotation' },
+            { label: 'Mid-project milestone', amount: midTotal * 0.35, note: 'Due after core installation' },
+            { label: 'Completion balance', amount: midTotal * 0.25, note: 'Due before final handover' },
+          ];
+
+          const recommendations = raw.recommendations || [
+            `Optimize your ${raw.roomType || 'space'} layout by layering accent lighting.`,
+            'Confirm details during the physical site surveyor inspection.',
+            'Expect construction completion within the estimated timeframe.',
+          ];
+
+          // Material selections mapping
+          const materialSels = raw.materialSelections || raw.selectedItems?.reduce((acc: any, cur: any) => {
+            acc[cur.category] = cur.item;
+            return acc;
+          }, {}) || DEFAULT_MATERIAL_SELECTIONS;
+
+          setEstimate({
+            id: raw.id,
+            projectName: raw.projectName || 'Renovation Project',
+            roomType: raw.roomType || 'Living Room',
+            complexity: raw.complexity || 'Standard Renovation',
+            lowEstimate: raw.lowEstimate || 0,
+            highEstimate: raw.highEstimate || 0,
+            confidence: raw.confidence || 85,
+            costPerSqm: raw.costPerSqm || (midTotal / floorArea),
+            duration: raw.duration || '2-4 weeks',
+            status: raw.status || 'Saved',
+            paymentPlanOptions: raw.paymentPlanOptions || [],
+            floorAreaSqm: floorArea,
+            wallAreaSqm: wallArea,
+            costLines,
+            paymentSchedule,
+            recommendations,
+            materialSelections: materialSels,
+            disclaimer: raw.disclaimer || 'This Smart Estimate is an AI-generated budgeting guide. It is not an official TBM quotation. Final pricing is confirmed after inspection.',
+          });
+        }
+      } catch (err) {
+        console.error('Failed to load estimate details:', err);
+      } finally {
+        if (active) setIsLoading(false);
+      }
+    }
+    loadDetails();
+    return () => {
+      active = false;
+    };
+  }, [params.estimateId]);
 
   const comparisonCards = useMemo(() => {
+    if (!estimate) return [];
     const economy = estimate.lowEstimate * 0.82;
     const standard = (estimate.lowEstimate + estimate.highEstimate) / 2;
     const luxury = estimate.highEstimate * 1.22;
@@ -70,9 +127,10 @@ export default function EstimateDetailScreen() {
       { label: 'Standard', value: standard, note: 'Balanced durability' },
       { label: 'Luxury', value: luxury, note: 'High-end fixtures' },
     ];
-  }, [estimate.highEstimate, estimate.lowEstimate]);
+  }, [estimate]);
 
   const openQuotation = () => {
+    if (!estimate) return;
     router.push({
       pathname: '/screens/ziora-ai/OfficialQuotationScreen',
       params: { estimateId: estimate.id, projectName: estimate.projectName },
@@ -100,188 +158,246 @@ export default function EstimateDetailScreen() {
         </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Main Budget Card */}
-        <View style={styles.budgetCard}>
-          <Text style={styles.eyebrow} allowFontScaling={false}>AI SMART ESTIMATE (NON-BINDING)</Text>
-          <Text style={styles.projectName} allowFontScaling={false}>{estimate.projectName}</Text>
-          <Text style={styles.metaText} allowFontScaling={false}>
-            {estimate.roomType} • {estimate.complexity}
+      {isLoading || !estimate ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color="#C9922A" />
+          <Text style={{ color: '#8E8E93', fontFamily: 'Manrope', fontSize: 13, marginTop: 12 }} allowFontScaling={false}>
+            Retrieving smart estimate details...
           </Text>
-
-          {/* Pricing Range Box */}
-          <View style={styles.rangeBox}>
-            <Text style={styles.rangeLabel} allowFontScaling={false}>ESTIMATED BUDGET RANGE</Text>
-            <Text style={styles.rangeValue} allowFontScaling={false}>
-              {formatNaira(estimate.lowEstimate)} – {formatNaira(estimate.highEstimate)}
-            </Text>
-            <Text style={styles.rangeSub} allowFontScaling={false}>*Final budget determined after site inspection</Text>
-          </View>
-
-          {/* Core Info Cells */}
-          <View style={styles.infoCellsGrid}>
-            <View style={styles.infoCell}>
-              <Text style={styles.infoCellLabel} allowFontScaling={false}>CONFIDENCE</Text>
-              <Text style={styles.infoCellValue} allowFontScaling={false}>{estimate.confidence}%</Text>
-            </View>
-            <View style={styles.infoCell}>
-              <Text style={styles.infoCellLabel} allowFontScaling={false}>COST / SQM</Text>
-              <Text style={styles.infoCellValue} allowFontScaling={false}>
-                {formatNaira(estimate.costPerSqm)}
-              </Text>
-            </View>
-          </View>
         </View>
-
-        {/* Confidence Explanation Banner */}
-        <View style={styles.explanationBanner}>
-          <Ionicons name="sparkles-outline" size={18} color="#C9922A" />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.explanationTitle} allowFontScaling={false}>
-              Ziora Confidence Score: {estimate.confidence}%
-            </Text>
-            <Text style={styles.explanationBody} allowFontScaling={false}>
-              Based on completed room dimensions, selected material qualities per category, and scope options. Site inspection will raise accuracy to 100%.
-            </Text>
-          </View>
-        </View>
-
-        {/* Detailed Cost Analysis Breakdown */}
-        <SectionTitle title="Cost Breakdown" />
-        <View style={styles.table}>
-          {estimate.costLines.map((line) => (
-            <View key={line.label} style={styles.tableRow}>
-              <View style={styles.rowLabelGroup}>
-                <Text style={styles.rowLabelText} allowFontScaling={false}>{line.label}</Text>
-                <Text style={styles.rowSubText} allowFontScaling={false}>{line.note}</Text>
-              </View>
-              <Text style={styles.rowPriceText} allowFontScaling={false}>{formatNaira(line.amount)}</Text>
-            </View>
-          ))}
-          {/* Floor & Wall Space Area */}
-          <View style={[styles.tableRow, { borderBottomWidth: 0 }]}>
-            <View style={styles.rowLabelGroup}>
-              <Text style={styles.rowLabelText} allowFontScaling={false}>Project Area Details</Text>
-              <Text style={styles.rowSubText} allowFontScaling={false}>
-                Floor: {estimate.floorAreaSqm.toFixed(1)} sqm | Walls: {estimate.wallAreaSqm.toFixed(1)} sqm
-              </Text>
-            </View>
-            <Text style={styles.rowPriceText} allowFontScaling={false}>
-              {estimate.duration}
-            </Text>
-          </View>
-        </View>
-
-        {/* Milestone Payment Schedule */}
-        <SectionTitle title="Suggested Milestone Schedule" />
-        <View style={styles.milestoneBox}>
-          {estimate.paymentSchedule.map((line, idx) => (
-            <View key={line.label} style={styles.milestoneRow}>
-              <View style={styles.milestoneIndicatorCol}>
-                <View style={styles.milestoneNodeActive}>
-                  <Text style={styles.milestoneNodeText} allowFontScaling={false}>{idx + 1}</Text>
+      ) : (
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          {/* Main Budget Card */}
+          <View style={styles.budgetCard}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <Text style={styles.eyebrow} allowFontScaling={false}>AI SMART ESTIMATE (NON-BINDING)</Text>
+              {estimate.status && (
+                <View style={{ backgroundColor: 'rgba(52, 199, 89, 0.15)', borderWidth: 1, borderColor: '#34C759', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2 }}>
+                  <Text style={{ color: '#34C759', fontSize: 10, fontFamily: 'Manrope', fontWeight: '800' }} allowFontScaling={false}>
+                    {estimate.status.toUpperCase()}
+                  </Text>
                 </View>
-                {idx < estimate.paymentSchedule.length - 1 && <View style={styles.milestoneLine} />}
+              )}
+            </View>
+            <Text style={styles.projectName} allowFontScaling={false}>{estimate.projectName}</Text>
+            <Text style={styles.metaText} allowFontScaling={false}>
+              {estimate.roomType} • {estimate.complexity}
+            </Text>
+
+            {/* Pricing Range Box */}
+            <View style={styles.rangeBox}>
+              <Text style={styles.rangeLabel} allowFontScaling={false}>ESTIMATED BUDGET RANGE</Text>
+              <Text style={styles.rangeValue} allowFontScaling={false}>
+                {formatNaira(estimate.lowEstimate)} – {formatNaira(estimate.highEstimate)}
+              </Text>
+              <Text style={styles.rangeSub} allowFontScaling={false}>*Final budget determined after site inspection</Text>
+            </View>
+
+            {/* Core Info Cells */}
+            <View style={styles.infoCellsGrid}>
+              <View style={styles.infoCell}>
+                <Text style={styles.infoCellLabel} allowFontScaling={false}>CONFIDENCE</Text>
+                <Text style={styles.infoCellValue} allowFontScaling={false}>{estimate.confidence}%</Text>
               </View>
-              <View style={styles.milestoneTextCol}>
-                <Text style={styles.milestoneTitle} allowFontScaling={false}>{line.label}</Text>
-                <Text style={styles.milestoneDesc} allowFontScaling={false}>{line.note}</Text>
-                <Text style={styles.milestoneAmount} allowFontScaling={false}>{formatNaira(line.amount)}</Text>
+              <View style={styles.infoCell}>
+                <Text style={styles.infoCellLabel} allowFontScaling={false}>COST / SQM</Text>
+                <Text style={styles.infoCellValue} allowFontScaling={false}>
+                  {formatNaira(estimate.costPerSqm)}
+                </Text>
               </View>
             </View>
-          ))}
-        </View>
+          </View>
 
-        {/* AI Smart Recommendations */}
-        <SectionTitle title="AI Design Recommendations" />
-        <View style={styles.recommendationsList}>
-          {estimate.recommendations.map((rec) => (
-            <View key={rec} style={styles.recommendationItem}>
-              <View style={styles.recBulletCircle}>
-                <Ionicons name="checkmark" size={12} color="#000000" />
-              </View>
-              <Text style={styles.recommendationText} allowFontScaling={false}>
-                {rec}
+          {/* Confidence Explanation Banner */}
+          <View style={styles.explanationBanner}>
+            <Ionicons name="sparkles-outline" size={18} color="#C9922A" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.explanationTitle} allowFontScaling={false}>
+                Ziora Confidence Score: {estimate.confidence}%
+              </Text>
+              <Text style={styles.explanationBody} allowFontScaling={false}>
+                Based on completed room dimensions, selected material qualities per category, and scope options. Site inspection will raise accuracy to 100%.
               </Text>
             </View>
-          ))}
-        </View>
+          </View>
 
-        {/* Selected Category Finishes */}
-        <SectionTitle title="Selected Category Finishes" />
-        <View style={styles.finishesGrid}>
-          {materialSummary(estimate.materialSelections).map((item) => {
-            const [catName, tierName] = item.split(': ');
-            return (
-              <View key={item} style={styles.finishCard}>
-                <Text style={styles.finishCardLabel} allowFontScaling={false}>{catName.toUpperCase()}</Text>
-                <Text style={styles.finishCardValue} allowFontScaling={false}>{tierName}</Text>
+          {/* Detailed Cost Analysis Breakdown */}
+          <SectionTitle title="Cost Breakdown" />
+          <View style={styles.table}>
+            {estimate.costLines.map((line: any) => (
+              <View key={line.label} style={styles.tableRow}>
+                <View style={styles.rowLabelGroup}>
+                  <Text style={styles.rowLabelText} allowFontScaling={false}>{line.label}</Text>
+                  <Text style={styles.rowSubText} allowFontScaling={false}>{line.note}</Text>
+                </View>
+                <Text style={styles.rowPriceText} allowFontScaling={false}>{formatNaira(line.amount)}</Text>
               </View>
-            );
-          })}
-        </View>
-
-        {/* Scenario Comparisons */}
-        <SectionTitle title="Compare Material Scenarios" />
-        <Text style={styles.compareHint} allowFontScaling={false}>
-          See standard finish tier alternatives for this room size:
-        </Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.compareScroll}>
-          {comparisonCards.map((item) => (
-            <View key={item.label} style={styles.compareCard}>
-              <Text style={styles.compareLabel} allowFontScaling={false}>{item.label}</Text>
-              <Text style={styles.compareValue} allowFontScaling={false}>{formatNaira(item.value)}</Text>
-              <Text style={styles.compareDesc} allowFontScaling={false}>{item.note}</Text>
+            ))}
+            {/* Floor & Wall Space Area */}
+            <View style={[styles.tableRow, { borderBottomWidth: 0 }]}>
+              <View style={styles.rowLabelGroup}>
+                <Text style={styles.rowLabelText} allowFontScaling={false}>Project Area Details</Text>
+                <Text style={styles.rowSubText} allowFontScaling={false}>
+                  Floor: {estimate.floorAreaSqm.toFixed(1)} sqm | Walls: {estimate.wallAreaSqm.toFixed(1)} sqm
+                </Text>
+              </View>
+              <Text style={styles.rowPriceText} allowFontScaling={false}>
+                {estimate.duration}
+              </Text>
             </View>
-          ))}
+          </View>
+
+          {/* Milestone Payment Schedule */}
+          <SectionTitle title="Suggested Milestone Schedule" />
+          <View style={styles.milestoneBox}>
+            {estimate.paymentSchedule.map((line: any, idx: number) => (
+              <View key={line.label} style={styles.milestoneRow}>
+                <View style={styles.milestoneIndicatorCol}>
+                  <View style={styles.milestoneNodeActive}>
+                    <Text style={styles.milestoneNodeText} allowFontScaling={false}>{idx + 1}</Text>
+                  </View>
+                  {idx < estimate.paymentSchedule.length - 1 && <View style={styles.milestoneLine} />}
+                </View>
+                <View style={styles.milestoneTextCol}>
+                  <Text style={styles.milestoneTitle} allowFontScaling={false}>{line.label}</Text>
+                  <Text style={styles.milestoneDesc} allowFontScaling={false}>{line.note}</Text>
+                  <Text style={styles.milestoneAmount} allowFontScaling={false}>{formatNaira(line.amount)}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+
+          {/* Flexible Payment Plans */}
+          {estimate.paymentPlanOptions && estimate.paymentPlanOptions.length > 0 && (
+            <>
+              <SectionTitle title="Flexible Payment Plans" />
+              <Text style={styles.compareHint} allowFontScaling={false}>
+                Choose a payment schedule that fits your budget:
+              </Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.compareScroll}>
+                {estimate.paymentPlanOptions.map((plan: any, index: number) => {
+                  const isSelected = selectedPlanIndex === index;
+                  return (
+                    <Pressable
+                      key={plan.name}
+                      style={[
+                        styles.compareCard,
+                        isSelected && { borderColor: '#C9922A', backgroundColor: 'rgba(201, 146, 42, 0.08)' }
+                      ]}
+                      onPress={() => setSelectedPlanIndex(index)}
+                    >
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                        <Text style={[styles.compareLabel, isSelected && { color: '#C9922A' }]} allowFontScaling={false}>
+                          {plan.name}
+                        </Text>
+                        {isSelected && <Ionicons name="checkmark-circle" size={16} color="#C9922A" />}
+                      </View>
+                      <Text style={styles.compareValue} allowFontScaling={false}>
+                        {formatNaira(plan.perInstallment)} <Text style={{ fontSize: 10, color: '#8E8E93' }}>/ inst</Text>
+                      </Text>
+                      <Text style={[styles.compareDesc, { marginTop: 4 }]} allowFontScaling={false}>
+                        {plan.installments} Installments • {plan.description}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </>
+          )}
+
+          {/* AI Smart Recommendations */}
+          <SectionTitle title="AI Design Recommendations" />
+          <View style={styles.recommendationsList}>
+            {estimate.recommendations.map((rec: string) => (
+              <View key={rec} style={styles.recommendationItem}>
+                <View style={styles.recBulletCircle}>
+                  <Ionicons name="checkmark" size={12} color="#000000" />
+                </View>
+                <Text style={styles.recommendationText} allowFontScaling={false}>
+                  {rec}
+                </Text>
+              </View>
+            ))}
+          </View>
+
+          {/* Selected Category Finishes (COMMENTED OUT: NOT IN API)
+          <SectionTitle title="Selected Category Finishes" />
+          <View style={styles.finishesGrid}>
+            {materialSummary(estimate.materialSelections).map((item: string) => {
+              const [catName, tierName] = item.split(': ');
+              return (
+                <View key={item} style={styles.finishCard}>
+                  <Text style={styles.finishCardLabel} allowFontScaling={false}>{catName.toUpperCase()}</Text>
+                  <Text style={styles.finishCardValue} allowFontScaling={false}>{tierName}</Text>
+                </View>
+              );
+            })}
+          </View>
+          */}
+
+          {/* Scenario Comparisons */}
+          <SectionTitle title="Compare Material Scenarios" />
+          <Text style={styles.compareHint} allowFontScaling={false}>
+            See standard finish tier alternatives for this room size:
+          </Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.compareScroll}>
+            {comparisonCards.map((item) => (
+              <View key={item.label} style={styles.compareCard}>
+                <Text style={styles.compareLabel} allowFontScaling={false}>{item.label}</Text>
+                <Text style={styles.compareValue} allowFontScaling={false}>{formatNaira(item.value)}</Text>
+                <Text style={styles.compareDesc} allowFontScaling={false}>{item.note}</Text>
+              </View>
+            ))}
+          </ScrollView>
+
+          {/* Instant Upgrades Block */}
+          <SectionTitle title="Instant Upgrades" />
+          <View style={styles.upgradeGrid}>
+            {[
+              { icon: 'cube-outline', label: 'Add 3D Design', desc: 'Photorealistic layout model' },
+              { icon: 'calendar-outline', label: 'Book Site Inspection', desc: 'Confirm dimensions' },
+              { icon: 'document-text-outline', label: 'Request Official BOQ', desc: 'Detailed cost breakdown' },
+              { icon: 'chatbubbles-outline', label: 'Speak with Designer', desc: 'Get free expert advice' },
+            ].map((up) => (
+              <Pressable
+                key={up.label}
+                style={({ pressed }) => [styles.upgradeCard, pressed && styles.pressed]}
+                onPress={() => {
+                  showFeedback('success', 'Request Received', `${up.label} request added. Bogat administrator will contact you.`);
+                }}
+              >
+                <View style={styles.upgradeHeader}>
+                  <Ionicons name={up.icon as any} size={22} color="#C9922A" />
+                  <Ionicons name="chevron-forward" size={14} color="#5D5D5D" />
+                </View>
+                <View>
+                  <Text style={styles.upgradeTitle} allowFontScaling={false}>{up.label}</Text>
+                  <Text style={styles.upgradeDesc} allowFontScaling={false}>{up.desc}</Text>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+
+          {/* Funnel Call to Action */}
+          <View style={styles.disclaimerContainer}>
+            <Ionicons name="shield-checkmark" size={18} color="#C9922A" style={{ marginTop: 2 }} />
+            <Text style={styles.disclaimerText} allowFontScaling={false}>
+              {estimate.disclaimer}
+            </Text>
+          </View>
+
+          <Pressable
+            style={({ pressed }) => [styles.ctaButton, pressed && styles.ctaButtonPressed]}
+            onPress={openQuotation}
+          >
+            <MaterialCommunityIcons name="file-document-edit-outline" size={20} color="#000000" style={{ marginRight: 6 }} />
+            <Text style={styles.ctaButtonText} allowFontScaling={false}>
+              Proceed to Official Quotation
+            </Text>
+          </Pressable>
         </ScrollView>
+      )}
 
-        {/* Instant Upgrades Block */}
-        <SectionTitle title="Instant Upgrades" />
-        <View style={styles.upgradeGrid}>
-          {[
-            { icon: 'cube-outline', label: 'Add 3D Design', desc: 'Photorealistic layout model' },
-            { icon: 'calendar-outline', label: 'Book Site Inspection', desc: 'Confirm dimensions' },
-            { icon: 'document-text-outline', label: 'Request Official BOQ', desc: 'Detailed cost breakdown' },
-            { icon: 'chatbubbles-outline', label: 'Speak with Designer', desc: 'Get free expert advice' },
-          ].map((up) => (
-            <Pressable
-              key={up.label}
-              style={({ pressed }) => [styles.upgradeCard, pressed && styles.pressed]}
-              onPress={() => {
-                showFeedback('success', 'Request Received', `${up.label} request added. Bogat administrator will contact you.`);
-              }}
-            >
-              <View style={styles.upgradeHeader}>
-                <Ionicons name={up.icon as any} size={22} color="#C9922A" />
-                <Ionicons name="chevron-forward" size={14} color="#5D5D5D" />
-              </View>
-              <View>
-                <Text style={styles.upgradeTitle} allowFontScaling={false}>{up.label}</Text>
-                <Text style={styles.upgradeDesc} allowFontScaling={false}>{up.desc}</Text>
-              </View>
-            </Pressable>
-          ))}
-        </View>
-
-        {/* Funnel Call to Action */}
-        <View style={styles.disclaimerContainer}>
-          <Ionicons name="shield-checkmark" size={18} color="#C9922A" style={{ marginTop: 2 }} />
-          <Text style={styles.disclaimerText} allowFontScaling={false}>
-            {estimate.disclaimer}
-          </Text>
-        </View>
-
-        <Pressable
-          style={({ pressed }) => [styles.ctaButton, pressed && styles.ctaButtonPressed]}
-          onPress={openQuotation}
-        >
-          <MaterialCommunityIcons name="file-document-edit-outline" size={20} color="#000000" style={{ marginRight: 6 }} />
-          <Text style={styles.ctaButtonText} allowFontScaling={false}>
-            Proceed to Official Quotation
-          </Text>
-        </Pressable>
-      </ScrollView>
       <FeedbackModal
         visible={feedbackVisible}
         type={feedbackType}

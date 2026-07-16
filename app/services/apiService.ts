@@ -36,6 +36,7 @@ export interface GenerateAiImagePayload {
   projectId: string;
   prompt: string;
   sourceImageUrl?: string;
+  style?: string; // ← NEW FIELD
   contextTags?: string[];
 }
 
@@ -577,6 +578,34 @@ export const ApiService = {
     return handleResponse<{ url: string }>(response);
   },
 
+  async uploadDocument(uri: string): Promise<ApiResponse<{ url: string }>> {
+    const token = await TokenService.getAccessToken();
+    const headers: Record<string, string> = {
+      'accept': '*/*',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const formData = new FormData();
+    const uriParts = uri.split('/');
+    const fileName = uriParts[uriParts.length - 1];
+    const fileExt = fileName.split('.').pop() || 'jpg';
+
+    formData.append('file', {
+      uri: Platform.OS === 'ios' ? uri.replace('file://', '') : uri,
+      name: fileName,
+      type: `image/${fileExt === 'jpg' ? 'jpeg' : fileExt}`,
+    } as any);
+
+    const response = await fetch(`${BASE_URL}/uploads/document`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+    return handleResponse<{ url: string }>(response);
+  },
+
   async createAIProject(payload: {
     sourceImageUrl?: string | null;
     outputType: number;
@@ -605,6 +634,7 @@ export const ApiService = {
     projectId: string;
     prompt: string;
     sourceImageUrl?: string | null;
+    style?: string | null; // ← NEW FIELD
     contextTags?: string[];
   }): Promise<ApiResponse<any>> {
     const token = await TokenService.getAccessToken();
@@ -694,7 +724,7 @@ export const ApiService = {
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
-    const response = await fetch(`${BASE_URL}/ai/renovation/estimate`, {
+    const response = await fetch(`${BASE_URL}/ai/renovation-estimates`, {
       method: 'POST',
       headers,
       body: JSON.stringify(payload),
@@ -710,7 +740,7 @@ export const ApiService = {
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
-    const response = await fetch(`${BASE_URL}/ai/renovation/estimates`, {
+    const response = await fetch(`${BASE_URL}/ai/renovation-estimates`, {
       method: 'GET',
       headers,
     });
@@ -725,7 +755,7 @@ export const ApiService = {
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
-    const response = await fetch(`${BASE_URL}/ai/renovation/estimates/${estimateId}`, {
+    const response = await fetch(`${BASE_URL}/ai/renovation-estimates/${estimateId}`, {
       method: 'GET',
       headers,
     });
@@ -745,5 +775,30 @@ export const ApiService = {
       headers,
     });
     return handleResponse<any>(response);
+  },
+
+  async getAiStyles(): Promise<ApiResponse<any[]>> {
+    const response = await fetch(`${BASE_URL}/ai/styles`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    return handleResponse<any[]>(response);
+  },
+
+  async getInspiration(category?: string, style?: string): Promise<ApiResponse<any[]>> {
+    const queryParams: string[] = [];
+    if (category) queryParams.push(`category=${encodeURIComponent(category)}`);
+    if (style) queryParams.push(`style=${encodeURIComponent(style)}`);
+    const queryString = queryParams.length > 0 ? `?${queryParams.join('&')}` : '';
+
+    const response = await fetch(`${BASE_URL}/inspiration${queryString}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    return handleResponse<any[]>(response);
   }
 };

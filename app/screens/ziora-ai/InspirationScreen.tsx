@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   SafeAreaView,
   StyleSheet,
@@ -9,11 +9,13 @@ import {
   Modal,
   Platform,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { ApiService } from '@/app/services/apiService';
 
 export const options = {
   headerShown: false,
@@ -30,69 +32,7 @@ interface InspirationItem {
   description: string;
 }
 
-// Hardcoded premium design inspiration entries based on the Ziora spec
-const INSPIRATION_DESIGNS: InspirationItem[] = [
-  {
-    id: 'insp-1',
-    title: 'Minimalist Culinary Space',
-    category: 'Kitchen',
-    style: 'Minimalist',
-    image: 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=600&auto=format&fit=crop&q=80',
-    isLocked: false,
-    tier: 'Economy',
-    description: 'Clean handleless cabinets, integrated smart appliances, and a polished quartz island countertop.',
-  },
-  {
-    id: 'insp-2',
-    title: 'Scandinavian Sanctuary',
-    category: 'Bedroom',
-    style: 'Minimalist',
-    image: 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=600&auto=format&fit=crop&q=80',
-    isLocked: false,
-    tier: 'Economy',
-    description: 'Natural oak timber panels, cozy linen layers, and floor-to-ceiling perimeter window bays.',
-  },
-  {
-    id: 'insp-3',
-    title: 'Modern Luxury Living Room',
-    category: 'Living Room',
-    style: 'Luxury',
-    image: 'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=600&auto=format&fit=crop&q=80',
-    isLocked: true,
-    tier: 'Premium',
-    description: 'Fluted architectural walnut wall panels, custom brass fittings, and low-profile velvet lounge seating.',
-  },
-  {
-    id: 'insp-4',
-    title: 'Industrial Executive Suite',
-    category: 'Office',
-    style: 'Modern',
-    image: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=600&auto=format&fit=crop&q=80',
-    isLocked: true,
-    tier: 'Premium',
-    description: 'Matte black structural steel frames, polished architectural concrete, and integrated smart LED strip runs.',
-  },
-  {
-    id: 'insp-5',
-    title: 'Spa-Inspired Bath Oasis',
-    category: 'Bathroom',
-    style: 'Luxury',
-    image: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=600&auto=format&fit=crop&q=80',
-    isLocked: true,
-    tier: 'Luxury',
-    description: 'Floating double slab wash vanity, freestanding soaking stone tub, and book-matched Carrara marble tiling.',
-  },
-  {
-    id: 'insp-6',
-    title: 'Biophilic Patio Deck',
-    category: 'Outdoor',
-    style: 'Modern',
-    image: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=600&auto=format&fit=crop&q=80',
-    isLocked: true,
-    tier: 'Luxury',
-    description: 'Premium teak decking planks, flush glass transitions, and a lush perimeter garden landscape wall.',
-  },
-];
+
 
 export default function InspirationScreen() {
   const router = useRouter();
@@ -101,15 +41,75 @@ export default function InspirationScreen() {
   const [selectedTier, setSelectedTier] = useState<string>('');
   const [selectedItem, setSelectedItem] = useState<InspirationItem | null>(null);
   const [detailsModalVisible, setDetailsModalVisible] = useState<boolean>(false);
+  const [allItems, setAllItems] = useState<InspirationItem[]>([]);
+  const [categories, setCategories] = useState<string[]>(['All']);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  const categories = ['All', 'Living Room', 'Bedroom', 'Kitchen', 'Bathroom', 'Office', 'Outdoor'];
+  useEffect(() => {
+    let active = true;
+    async function loadInspirations() {
+      setIsLoading(true);
+      try {
+        const res = await ApiService.getInspiration();
+        const resData = (res as any)?.data || res;
+        const items = resData?.items || resData?.data?.items || resData || [];
 
-  // Filtered dataset
+        if (items && active) {
+          const mapped = items.map((item: any) => {
+            let cat: 'Kitchen' | 'Bathroom' | 'Bedroom' | 'Living Room' | 'Office' | 'Outdoor' = 'Living Room';
+            const rawCat = (item.category || '').toLowerCase();
+            if (rawCat.includes('kitchen')) cat = 'Kitchen';
+            else if (rawCat.includes('bathroom') || rawCat.includes('toilet') || rawCat.includes('restroom')) cat = 'Bathroom';
+            else if (rawCat.includes('bedroom')) cat = 'Bedroom';
+            else if (rawCat.includes('living') || rawCat.includes('parlor') || rawCat.includes('parlour')) cat = 'Living Room';
+            else if (rawCat.includes('office') || rawCat.includes('work')) cat = 'Office';
+            else if (rawCat.includes('outdoor') || rawCat.includes('patio') || rawCat.includes('garden')) cat = 'Outdoor';
+
+            let sty: 'Modern' | 'Luxury' | 'Minimalist' = 'Modern';
+            const rawSty = (item.style || '').toLowerCase();
+            if (rawSty.includes('luxur')) sty = 'Luxury';
+            else if (rawSty.includes('minim') || rawSty.includes('afro') || rawSty.includes('wabi') || rawSty.includes('bohe')) sty = 'Minimalist';
+            else sty = 'Modern';
+
+            let tier: 'Economy' | 'Premium' | 'Luxury' = 'Economy';
+            if (sty === 'Luxury') tier = 'Luxury';
+            else if (rawSty.includes('premium')) tier = 'Premium';
+
+            return {
+              id: String(item.id || Math.random()),
+              title: item.title || 'Inspiration Design',
+              category: cat,
+              style: sty,
+              image: item.imageUrl || 'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=600',
+              isLocked: sty === 'Luxury' || tier === 'Premium',
+              tier: tier,
+              description: item.description || 'A premium design layout curated by Ziora professionals.',
+            };
+          });
+
+          setAllItems(mapped);
+
+          const extractedCats = ['All', ...new Set(mapped.map((i: any) => i.category).filter(Boolean) as string[])];
+          setCategories(extractedCats);
+        }
+      } catch (err) {
+        console.error('Failed to load inspirations:', err);
+      } finally {
+        if (active) setIsLoading(false);
+      }
+    }
+    loadInspirations();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const filteredItems = useMemo(() => {
-    return selectedCategory === 'All' || selectedCategory === ''
-      ? INSPIRATION_DESIGNS
-      : INSPIRATION_DESIGNS.filter((item) => item.category === selectedCategory);
-  }, [selectedCategory]);
+    if (selectedCategory === 'All') {
+      return allItems;
+    }
+    return allItems.filter(item => item.category === selectedCategory);
+  }, [selectedCategory, allItems]);
 
   const handleCardPress = (item: InspirationItem) => {
     if (item.isLocked) {
@@ -235,23 +235,32 @@ export default function InspirationScreen() {
       </View>
 
       {/* ── GRID LIST OF DESIGNS ── */}
-      <FlatList
-        data={filteredItems}
-        keyExtractor={(item) => item.id}
-        renderItem={renderDesignItem}
-        contentContainerStyle={styles.gridContent}
-        showsVerticalScrollIndicator={false}
-        numColumns={2}
-        columnWrapperStyle={styles.rowWrapper}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Ionicons name="images-outline" size={48} color="#333333" />
-            <Text style={styles.emptyText} allowFontScaling={false}>
-              No concepts found
-            </Text>
-          </View>
-        }
-      />
+      {isLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#C9922A" />
+          <Text style={styles.loadingText} allowFontScaling={false}>
+            Loading design inspirations...
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={filteredItems}
+          keyExtractor={(item) => item.id}
+          renderItem={renderDesignItem}
+          contentContainerStyle={styles.gridContent}
+          showsVerticalScrollIndicator={false}
+          numColumns={2}
+          columnWrapperStyle={styles.rowWrapper}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Ionicons name="images-outline" size={48} color="#333333" />
+              <Text style={styles.emptyText} allowFontScaling={false}>
+                No concepts found
+              </Text>
+            </View>
+          }
+        />
+      )}
 
       {/* ── DETAILS MODAL (UNLOCKED CARDS) ── */}
       <Modal
@@ -739,5 +748,17 @@ const styles = StyleSheet.create({
     fontFamily: 'Manrope',
     fontSize: 15,
     fontWeight: '700',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 120,
+  },
+  loadingText: {
+    color: '#8A8A8F',
+    fontFamily: 'Manrope',
+    fontSize: 13,
+    marginTop: 12,
   },
 });

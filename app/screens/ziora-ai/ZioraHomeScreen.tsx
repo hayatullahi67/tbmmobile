@@ -5,6 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
+import { ApiService } from '@/app/services/apiService';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -22,14 +23,28 @@ export const options = {
   headerShown: false,
 };
 
+const STATIC_STYLES = [
+  { id: 'modern', name: 'Modern' },
+  { id: 'minimalist', name: 'Minimalism' },
+  { id: 'wabi-sabi', name: 'Wabi-Sabi' },
+  { id: 'tropical', name: 'Tropical' },
+  { id: 'farmhouse', name: 'Farmhouse' },
+  { id: 'memphis', name: 'Memphis' },
+  { id: 'afro-minimalism', name: 'Afro-Minimalism' },
+  { id: 'contemporary-african', name: 'Contemporary African' },
+  { id: 'industrial', name: 'Industrial' },
+  { id: 'bohemian', name: 'Bohemian' },
+];
+
 export default function ZioraHomeScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const [promptText, setPromptText] = useState('');
   const [outputType, setOutputType] = useState<number>(1); // 1 = Image, 2 = Video
   const [referenceImage, setReferenceImage] = useState<string | null>(null);
-  const [referenceImageBase64, setReferenceImageBase64] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [stylesList, setStylesList] = useState<any[]>(STATIC_STYLES);
+  const [selectedStyleId, setSelectedStyleId] = useState<string>('modern');
 
   const [feedbackVisible, setFeedbackVisible] = useState(false);
   const [feedbackType, setFeedbackType] = useState<'success' | 'error' | 'info'>('info');
@@ -42,6 +57,22 @@ export default function ZioraHomeScreen() {
     setFeedbackMessage(message);
     setFeedbackVisible(true);
   };
+
+  useEffect(() => {
+    async function fetchStyles() {
+      try {
+        const res = await ApiService.getAiStyles();
+        if (res.success && res.data && res.data.length > 0) {
+          setStylesList(res.data);
+          const hasModern = res.data.find((s: any) => s.id === 'modern' || s.id === 'Modern');
+          setSelectedStyleId(hasModern ? hasModern.id : res.data[0].id);
+        }
+      } catch (err) {
+        console.error('Error fetching AI styles:', err);
+      }
+    }
+    fetchStyles();
+  }, []);
 
   useEffect(() => {
     if (params.prefilledPrompt) {
@@ -62,13 +93,12 @@ export default function ZioraHomeScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
-      quality: 0.8,
-      base64: true,
+      quality: 0.6,
+      base64: false,
     });
 
     if (!result.canceled && result.assets.length > 0) {
       setReferenceImage(result.assets[0].uri);
-      setReferenceImageBase64(result.assets[0].base64 || null);
     }
   };
 
@@ -83,8 +113,8 @@ export default function ZioraHomeScreen() {
       params: {
         prompt: promptText.trim(),
         inputUrl: referenceImage || '',
-        imageBase64: referenceImageBase64 || '',
         isVideo: outputType === 2 ? 'true' : 'false',
+        style: selectedStyleId,
       },
     });
   };
@@ -170,6 +200,33 @@ export default function ZioraHomeScreen() {
                   Video Result
                 </Text>
               </Pressable>
+            </View>
+
+            {/* Style Selector Section */}
+            <Text style={styles.sectionHeading} allowFontScaling={false}>
+              Choose Design Style
+            </Text>
+            <View style={{ marginBottom: 16 }}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.styleCarousel}
+              >
+                {stylesList.map((style) => {
+                  const isActive = selectedStyleId === style.id;
+                  return (
+                    <Pressable
+                      key={style.id}
+                      style={[styles.stylePill, isActive && styles.stylePillActive]}
+                      onPress={() => setSelectedStyleId(style.id)}
+                    >
+                      <Text style={[styles.stylePillText, isActive && styles.stylePillTextActive]} allowFontScaling={false}>
+                        {style.name}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
             </View>
 
             {/* Reference Image Actions */}
@@ -463,6 +520,41 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.6)',
     borderRadius: 10,
     padding: 2,
+  },
+  sectionHeading: {
+    color: '#FFFFFF',
+    fontFamily: 'Manrope',
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 10,
+    marginTop: 8,
+  },
+  styleCarousel: {
+    gap: 8,
+  },
+  stylePill: {
+    backgroundColor: '#111111',
+    borderWidth: 1,
+    borderColor: '#222222',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stylePillActive: {
+    backgroundColor: '#B58529',
+    borderColor: '#B58529',
+  },
+  stylePillText: {
+    color: '#888888',
+    fontFamily: 'Manrope',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  stylePillTextActive: {
+    color: '#000000',
+    fontWeight: '700',
   },
   exploreHeading: {
     color: '#FFFFFF',

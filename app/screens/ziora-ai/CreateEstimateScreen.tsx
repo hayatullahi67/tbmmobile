@@ -9,6 +9,7 @@ import {
   Text,
   TextInput,
   View,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -20,9 +21,8 @@ import {
   RENOVATION_COMPLEXITIES,
   QualityTier,
   RenovationComplexity,
-  encodeEstimateInput,
-  generateSmartEstimate,
 } from '@/app/screens/ziora-ai/mockEstimateData';
+import { ApiService } from '@/app/services/apiService';
 
 export const options = {
   headerShown: false,
@@ -70,20 +70,24 @@ export default function CreateEstimateScreen() {
   const [includeElectrical, setIncludeElectrical] = useState(true);
   const [includePlumbing, setIncludePlumbing] = useState(true);
   const [contingency, setContingency] = useState('10');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Calculates a live data completeness score
   const completionScore = useMemo(() => {
-    let score = 30;
-    if (projectName.trim()) score += 15;
-    if (parseFloat(length) > 0 && parseFloat(width) > 0 && parseFloat(height) > 0) score += 20;
+    let score = 40;
+    if (projectName.trim()) score += 20;
+    if (parseFloat(length) > 0 && parseFloat(width) > 0 && parseFloat(height) > 0) score += 25;
     if (complexity) score += 15;
-    const materialSelectionsCount = Object.values(materialSelections).filter(Boolean).length;
-    score += Math.min(20, materialSelectionsCount * 3);
     return Math.min(100, score);
-  }, [complexity, height, length, materialSelections, projectName, width]);
+  }, [complexity, height, length, projectName, width]);
 
   const setMaterialTier = (key: keyof typeof DEFAULT_MATERIAL_SELECTIONS, tier: QualityTier) => {
     setMaterialSelections((current) => ({ ...current, [key]: tier }));
+  };
+  const parseDimension = (val: string) => {
+    const sanitized = val.replace(',', '.').trim();
+    const parsed = parseFloat(sanitized);
+    return isNaN(parsed) ? 0 : parsed;
   };
 
   const validateStep = (step: number) => {
@@ -94,11 +98,11 @@ export default function CreateEstimateScreen() {
       }
     }
     if (step === 2) {
-      const lenVal = parseFloat(length);
-      const widVal = parseFloat(width);
-      const heiVal = parseFloat(height);
-      if (isNaN(lenVal) || lenVal <= 0 || isNaN(widVal) || widVal <= 0 || isNaN(heiVal) || heiVal <= 0) {
-        showFeedback('error', 'Invalid Dimensions', 'Please check and enter room dimensions greater than 0.');
+      const lenVal = parseDimension(length);
+      const widVal = parseDimension(width);
+      const heiVal = parseDimension(height);
+      if (lenVal <= 0 || widVal <= 0 || heiVal <= 0) {
+        showFeedback('error', 'Invalid Dimensions', 'Please check and enter room dimensions greater than 0 meters (e.g. 4.5).');
         return false;
       }
     }
@@ -107,7 +111,7 @@ export default function CreateEstimateScreen() {
 
   const handleNext = () => {
     if (!validateStep(currentStep)) return;
-    if (currentStep < 5) {
+    if (currentStep < 4) {
       setCurrentStep(currentStep + 1);
     } else {
       handleSubmit();
@@ -122,38 +126,69 @@ export default function CreateEstimateScreen() {
     }
   };
 
-  const handleSubmit = () => {
-    const lenVal = parseFloat(length);
-    const widVal = parseFloat(width);
-    const heiVal = parseFloat(height);
-    const conVal = parseFloat(contingency);
+  const handleSubmit = async () => {
+    if (isSubmitting) return;
 
-    const input = {
-      projectName: projectName.trim(),
-      roomType,
-      lengthMeters: lenVal,
-      widthMeters: widVal,
-      heightMeters: heiVal,
-      complexity,
-      materialSelections,
-      includeFlooring,
-      includePainting,
-      includeElectrical,
-      includePlumbing,
-      contingencyPercent: isNaN(conVal) ? 10 : conVal,
-      infoScore: completionScore,
-    };
+    const lenVal = parseDimension(length);
+    const widVal = parseDimension(width);
+    const heiVal = parseDimension(height);
 
-    const estimate = generateSmartEstimate(input);
-    router.push({
-      pathname: '/screens/ziora-ai/EstimateDetailScreen',
-      params: {
-        estimateId: estimate.id,
-        estimateInput: encodeEstimateInput({ ...input, id: estimate.id }),
-      },
-    });
+    if (lenVal <= 0 || widVal <= 0 || heiVal <= 0) {
+      showFeedback('error', 'Invalid Dimensions', 'Room length, width, and height must be greater than zero. Please go back to Step 2 and correct the dimensions.');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    // Map material selections record to selectedItems array
+    const selectedItems = Object.entries(materialSelections).map(([category, item]) => ({
+      category,
+      item,
+    }));
+
+    try {
+      const res = await ApiService.createRenovationEstimate({
+        projectName: projectName.trim(),
+        roomType,
+        lengthMeters: lenVal,
+        widthMeters: widVal,
+        heightMeters: heiVal,
+        finishLevel: complexity,
+        includeFlooring,
+        includePainting,
+        includeElectrical,
+        includePlumbing,
+        contingencyPercent: parseFloat(contingency) || 10,
+        roomDimensions: {
+          length: lenVal,
+          width: widVal,
+          height: heiVal,
+        },
+      });
+
+      const rawData = (res as any)?.data || res;
+      const estimateId = rawData?.id || rawData?.estimateId;
+
+      if (estimateId) {
+        router.push({
+          pathname: '/screens/ziora-ai/EstimateDetailScreen',
+          params: {
+            estimateId: String(estimateId),
+          },
+        });
+      } else {
+        const errorsText = (res as any)?.errors && (res as any)?.errors.length > 0 ? (res as any)?.errors.join('\n') : '';
+        const errMsg = (res as any)?.message || errorsText || JSON.stringify(res) || 'Unable to save your smart estimate.';
+        showFeedback('error', 'Creation Failed', errMsg);
+      }
+    } catch (err: any) {
+      console.error('[API] Create Estimate failed:', err);
+      const errorsText = err.errors && err.errors.length > 0 ? `\nDetails:\n${err.errors.join('\n')}` : '';
+      showFeedback('error', 'Creation Error', `${err?.message || 'A network error occurred. Please try again.'}${errorsText}`);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
-
   const getStepTitle = () => {
     switch (currentStep) {
       case 1:
@@ -183,7 +218,7 @@ export default function CreateEstimateScreen() {
         </Pressable>
         <View style={styles.headerTitleContainer}>
           <Text style={styles.stepIndicator} allowFontScaling={false}>
-            STEP {currentStep} OF 5
+            STEP {currentStep} OF 4
           </Text>
           <Text style={styles.headerTitle} allowFontScaling={false}>
             {getStepTitle()}
@@ -198,7 +233,7 @@ export default function CreateEstimateScreen() {
 
       {/* Progress Bar */}
       <View style={styles.progressBarBg}>
-        <View style={[styles.progressBarFill, { width: `${(currentStep / 5) * 100}%` }]} />
+        <View style={[styles.progressBarFill, { width: `${(currentStep / 4) * 100}%` }]} />
       </View>
 
       <ScrollView
@@ -360,7 +395,7 @@ export default function CreateEstimateScreen() {
           </View>
         )}
 
-        {/* STEP 4: Quality selection by category */}
+        {/* STEP 4: Quality selection by category (COMMENTED OUT: NOT IN API)
         {currentStep === 4 && (
           <View style={styles.stepContainer}>
             <Text style={styles.introHeading} allowFontScaling={false}>
@@ -400,9 +435,10 @@ export default function CreateEstimateScreen() {
             </View>
           </View>
         )}
+        */}
 
-        {/* STEP 5: Options & Contingency */}
-        {currentStep === 5 && (
+        {/* STEP 4: Options & Contingency */}
+        {currentStep === 4 && (
           <View style={styles.stepContainer}>
             <Text style={styles.introHeading} allowFontScaling={false}>
               Included scope of work
@@ -458,18 +494,29 @@ export default function CreateEstimateScreen() {
       {/* Sticky Bottom Actions */}
       <View style={styles.footer}>
         <Pressable
-          style={({ pressed }) => [styles.ctaButton, pressed && styles.ctaButtonPressed]}
+          style={({ pressed }) => [
+            styles.ctaButton,
+            (pressed || isSubmitting) && styles.ctaButtonPressed,
+            isSubmitting && { opacity: 0.8 }
+          ]}
           onPress={handleNext}
+          disabled={isSubmitting}
         >
-          <Ionicons
-            name={currentStep === 5 ? 'sparkles' : 'arrow-forward'}
-            size={20}
-            color="#000000"
-            style={{ marginRight: 6 }}
-          />
-          <Text style={styles.ctaButtonText} allowFontScaling={false}>
-            {currentStep === 5 ? 'Generate Smart Estimate' : 'Continue'}
-          </Text>
+          {isSubmitting ? (
+            <ActivityIndicator size="small" color="#000000" />
+          ) : (
+            <>
+              <Ionicons
+                name={currentStep === 4 ? 'sparkles' : 'arrow-forward'}
+                size={20}
+                color="#000000"
+                style={{ marginRight: 6 }}
+              />
+              <Text style={styles.ctaButtonText} allowFontScaling={false}>
+                {currentStep === 4 ? 'Generate Smart Estimate' : 'Continue'}
+              </Text>
+            </>
+          )}
         </Pressable>
       </View>
       <FeedbackModal

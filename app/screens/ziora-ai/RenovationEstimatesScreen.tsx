@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   FlatList,
   Platform,
@@ -7,10 +7,12 @@ import {
   StyleSheet,
   Text,
   View,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { MOCK_SAVED_ESTIMATES, formatNaira } from '@/app/screens/ziora-ai/mockEstimateData';
+import { formatNaira } from '@/app/screens/ziora-ai/mockEstimateData';
+import { ApiService } from '@/app/services/apiService';
 
 export const options = {
   headerShown: false,
@@ -18,6 +20,30 @@ export const options = {
 
 export default function RenovationEstimatesScreen() {
   const router = useRouter();
+  const [estimates, setEstimates] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  useEffect(() => {
+    let active = true;
+    async function loadEstimates() {
+      setIsLoading(true);
+      try {
+        const res = await ApiService.getRenovationEstimates();
+        if (res.success && res.data && active) {
+          const list = res.data.items || res.data || [];
+          setEstimates(list);
+        }
+      } catch (err) {
+        console.error('Failed to fetch renovation estimates:', err);
+      } finally {
+        if (active) setIsLoading(false);
+      }
+    }
+    loadEstimates();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -39,66 +65,83 @@ export default function RenovationEstimatesScreen() {
         </Pressable>
       </View>
 
-      <FlatList
-        data={MOCK_SAVED_ESTIMATES}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-        ListHeaderComponent={
-          <View style={styles.heroBlock}>
-            <Text style={styles.heroTitle} allowFontScaling={false}>
-              Budget first. Quote after inspection.
-            </Text>
-            <Text style={styles.heroText} allowFontScaling={false}>
-              Ziora gives a preliminary renovation range for planning. TBM official quotations are issued only after site inspection and scope verification.
-            </Text>
-          </View>
-        }
-        renderItem={({ item }) => (
-          <Pressable
-            style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-            onPress={() =>
-              router.push({
-                pathname: '/screens/ziora-ai/EstimateDetailScreen',
-                params: { estimateId: item.id },
-              })
-            }
-          >
-            <View style={styles.cardHeader}>
-              <View style={styles.iconWrap}>
-                <Ionicons name="sparkles" size={20} color="#C9922A" />
-              </View>
-              <View style={styles.cardTitleWrap}>
-                <Text style={styles.projectName} allowFontScaling={false}>{item.projectName}</Text>
-                <Text style={styles.projectMeta} allowFontScaling={false}>
-                  {item.roomType} | {item.complexity}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color="#6F6F6F" />
-            </View>
-
-            <View style={styles.rangeRow}>
-              <View>
-                <Text style={styles.label} allowFontScaling={false}>ESTIMATED RANGE</Text>
-                <Text style={styles.rangeText} allowFontScaling={false}>
-                  {formatNaira(item.lowEstimate)} - {formatNaira(item.highEstimate)}
-                </Text>
-              </View>
-              <View style={styles.confidenceBadge}>
-                <Text style={styles.confidenceValue} allowFontScaling={false}>{item.confidence}%</Text>
-                <Text style={styles.confidenceLabel} allowFontScaling={false}>Confidence</Text>
-              </View>
-            </View>
-
-            <View style={styles.footerRow}>
-              <Text style={styles.footerText} allowFontScaling={false}>{item.duration}</Text>
-              <Text style={styles.footerText} allowFontScaling={false}>
-                {formatNaira(item.costPerSqm)} / sqm
+      {isLoading ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color="#C9922A" />
+          <Text style={{ color: '#8E8E93', fontFamily: 'Manrope', fontSize: 13, marginTop: 12 }} allowFontScaling={false}>
+            Loading saved estimates...
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={estimates}
+          keyExtractor={(item) => String(item.id)}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          ListHeaderComponent={
+            <View style={styles.heroBlock}>
+              <Text style={styles.heroTitle} allowFontScaling={false}>
+                Budget first. Quote after inspection.
+              </Text>
+              <Text style={styles.heroText} allowFontScaling={false}>
+                Ziora gives a preliminary renovation range for planning. TBM official quotations are issued only after site inspection and scope verification.
               </Text>
             </View>
-          </Pressable>
-        )}
-      />
+          }
+          ListEmptyComponent={
+            <View style={{ paddingVertical: 100, alignItems: 'center' }}>
+              <Ionicons name="calculator-outline" size={48} color="#2B2B2B" />
+              <Text style={{ color: '#5D5D5D', fontFamily: 'Manrope', fontSize: 14, fontWeight: '600', marginTop: 12 }} allowFontScaling={false}>
+                No saved estimates yet
+              </Text>
+            </View>
+          }
+          renderItem={({ item }) => (
+            <Pressable
+              style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+              onPress={() =>
+                router.push({
+                  pathname: '/screens/ziora-ai/EstimateDetailScreen',
+                  params: { estimateId: item.id },
+                })
+              }
+            >
+              <View style={styles.cardHeader}>
+                <View style={styles.iconWrap}>
+                  <Ionicons name="sparkles" size={20} color="#C9922A" />
+                </View>
+                <View style={styles.cardTitleWrap}>
+                  <Text style={styles.projectName} allowFontScaling={false}>{item.projectName || 'Renovation Upgrade'}</Text>
+                  <Text style={styles.projectMeta} allowFontScaling={false}>
+                    {item.roomType} | {item.complexity || 'Standard'}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#6F6F6F" />
+              </View>
+
+              <View style={styles.rangeRow}>
+                <View>
+                  <Text style={styles.label} allowFontScaling={false}>ESTIMATED RANGE</Text>
+                  <Text style={styles.rangeText} allowFontScaling={false}>
+                    {formatNaira(item.lowEstimate || 0)} - {formatNaira(item.highEstimate || 0)}
+                  </Text>
+                </View>
+                <View style={styles.confidenceBadge}>
+                  <Text style={styles.confidenceValue} allowFontScaling={false}>{item.confidence || 75}%</Text>
+                  <Text style={styles.confidenceLabel} allowFontScaling={false}>Confidence</Text>
+                </View>
+              </View>
+
+              <View style={styles.footerRow}>
+                <Text style={styles.footerText} allowFontScaling={false}>{item.duration || '2-4 weeks'}</Text>
+                <Text style={styles.footerText} allowFontScaling={false}>
+                  {formatNaira(item.costPerSqm || 0)} / sqm
+                </Text>
+              </View>
+            </Pressable>
+          )}
+        />
+      )}
 
       <View style={styles.footerBar}>
         <Pressable
