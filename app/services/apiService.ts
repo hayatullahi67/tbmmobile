@@ -800,5 +800,121 @@ export const ApiService = {
       },
     });
     return handleResponse<any[]>(response);
+  },
+
+  async request3DDesign(payload: {
+    estimateId: string;
+    projectDescription: string;
+    contactName: string;
+    contactPhone: string;
+    contactEmail: string;
+    additionalNotes?: string;
+  }): Promise<ApiResponse<any>> {
+    const token = await TokenService.getAccessToken();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'accept': '*/*',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    const response = await fetch(`${BASE_URL}/project-requests/3d-model`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<any>(response);
+  },
+
+  async requestBOQ(payload: {
+    estimateId: string;
+    contactName: string;
+    contactPhone: string;
+    contactEmail: string;
+    additionalNotes?: string;
+  }): Promise<ApiResponse<any>> {
+    const token = await TokenService.getAccessToken();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'accept': '*/*',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    const response = await fetch(`${BASE_URL}/project-requests/boq`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<any>(response);
+  },
+
+  async requestDesignerContact(payload: {
+    estimateId: string;
+    contactName: string;
+    contactPhone: string;
+    contactEmail: string;
+    additionalNotes?: string;
+  }): Promise<ApiResponse<any>> {
+    const token = await TokenService.getAccessToken();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'accept': '*/*',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    const response = await fetch(`${BASE_URL}/project-requests/contact-designer`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<any>(response);
+  },
+
+  async verifyInspectionPayment(payload: { reference: string }): Promise<ApiResponse<any>> {
+    const token = await TokenService.getAccessToken();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'accept': '*/*',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    const response = await fetch(`${BASE_URL}/inspections/verify-payment`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<any>(response);
+  },
+
+  async bookInspection(payload: {
+    contactName: string;
+    contactPhone: string;
+    contactEmail: string;
+    siteAddress: string;
+    siteCity: string;
+    siteState: string;
+    preferredDate1: string;
+    preferredDate2: string;
+    uploadedFileUrls?: string[];
+    paymentReference: string;
+    additionalNotes?: string;
+  }): Promise<ApiResponse<any>> {
+    const token = await TokenService.getAccessToken();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'accept': '*/*',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    const response = await fetch(`${BASE_URL}/inspections/book`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<any>(response);
   }
 };

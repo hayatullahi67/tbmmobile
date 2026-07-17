@@ -29,9 +29,21 @@ export default function RenovationEstimatesScreen() {
       setIsLoading(true);
       try {
         const res = await ApiService.getRenovationEstimates();
-        if (res.success && res.data && active) {
-          const list = res.data.items || res.data || [];
-          setEstimates(list);
+        const raw = (res as any)?.data || res;
+        const list = raw?.estimates || (Array.isArray(raw) ? raw : []);
+        if (active) {
+          const mapped = list.map((item: any) => {
+            const id = item.estimateId || item.id;
+            return {
+              id,
+              estimateId: id,
+              projectName: item.projectName || 'Renovation Upgrade',
+              roomType: item.roomType || 'Living Room',
+              totalEstimate: item.totalEstimate || 0,
+              createdAtUtc: item.createdAtUtc,
+            };
+          });
+          setEstimates(mapped);
         }
       } catch (err) {
         console.error('Failed to fetch renovation estimates:', err);
@@ -121,23 +133,27 @@ export default function RenovationEstimatesScreen() {
 
               <View style={styles.rangeRow}>
                 <View>
-                  <Text style={styles.label} allowFontScaling={false}>ESTIMATED RANGE</Text>
+                  <Text style={styles.label} allowFontScaling={false}>TOTAL ESTIMATE</Text>
                   <Text style={styles.rangeText} allowFontScaling={false}>
-                    {formatNaira(item.lowEstimate || 0)} - {formatNaira(item.highEstimate || 0)}
+                    {formatNaira(item.totalEstimate || 0)}
                   </Text>
                 </View>
+                {/* Commented out confidence rating indicator
                 <View style={styles.confidenceBadge}>
                   <Text style={styles.confidenceValue} allowFontScaling={false}>{item.confidence || 75}%</Text>
                   <Text style={styles.confidenceLabel} allowFontScaling={false}>Confidence</Text>
                 </View>
+                */}
               </View>
 
+              {/* Commented out range breakdown footer
               <View style={styles.footerRow}>
                 <Text style={styles.footerText} allowFontScaling={false}>{item.duration || '2-4 weeks'}</Text>
                 <Text style={styles.footerText} allowFontScaling={false}>
                   {formatNaira(item.costPerSqm || 0)} / sqm
                 </Text>
               </View>
+              */}
             </Pressable>
           )}
         />

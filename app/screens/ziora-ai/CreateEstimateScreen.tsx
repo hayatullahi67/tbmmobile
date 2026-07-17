@@ -60,9 +60,9 @@ export default function CreateEstimateScreen() {
   const [currentStep, setCurrentStep] = useState(1);
   const [projectName, setProjectName] = useState('');
   const [roomType, setRoomType] = useState('Kitchen');
-  const [length, setLength] = useState('4.5');
-  const [width, setWidth] = useState('3.5');
-  const [height, setHeight] = useState('2.8');
+  const [length, setLength] = useState('0');
+  const [width, setWidth] = useState('0');
+  const [height, setHeight] = useState('0');
   const [complexity, setComplexity] = useState<RenovationComplexity>('Standard Renovation');
   const [materialSelections, setMaterialSelections] = useState(DEFAULT_MATERIAL_SELECTIONS);
   const [includeFlooring, setIncludeFlooring] = useState(true);
@@ -90,6 +90,25 @@ export default function CreateEstimateScreen() {
     return isNaN(parsed) ? 0 : parsed;
   };
 
+  const cleanNumber = (val: string) => {
+    let cleaned = val.replace(/[^0-9.,]/g, '');
+    const firstSeparatorIndex = cleaned.search(/[.,]/);
+    if (firstSeparatorIndex !== -1) {
+      const prefix = cleaned.substring(0, firstSeparatorIndex + 1);
+      const suffix = cleaned.substring(firstSeparatorIndex + 1).replace(/[.,]/g, '');
+      cleaned = prefix + suffix;
+    }
+    return cleaned;
+  };
+
+  const handleNumberChange = (val: string, setter: (v: string) => void) => {
+    let cleaned = cleanNumber(val);
+    if (cleaned.startsWith('0') && cleaned.length > 1 && !cleaned.startsWith('0.') && !cleaned.startsWith('0,')) {
+      cleaned = cleaned.substring(1);
+    }
+    setter(cleaned || '0');
+  };
+
   const validateStep = (step: number) => {
     if (step === 1) {
       if (!projectName.trim()) {
@@ -111,7 +130,7 @@ export default function CreateEstimateScreen() {
 
   const handleNext = () => {
     if (!validateStep(currentStep)) return;
-    if (currentStep < 4) {
+    if (currentStep < 3) {
       setCurrentStep(currentStep + 1);
     } else {
       handleSubmit();
@@ -196,10 +215,6 @@ export default function CreateEstimateScreen() {
       case 2:
         return 'Room Size';
       case 3:
-        return 'Renovation Scope';
-      case 4:
-        return 'Finishes Quality';
-      case 5:
         return 'Details & Buffer';
       default:
         return 'Smart Estimate';
@@ -218,7 +233,7 @@ export default function CreateEstimateScreen() {
         </Pressable>
         <View style={styles.headerTitleContainer}>
           <Text style={styles.stepIndicator} allowFontScaling={false}>
-            STEP {currentStep} OF 4
+            STEP {currentStep} OF 3
           </Text>
           <Text style={styles.headerTitle} allowFontScaling={false}>
             {getStepTitle()}
@@ -233,7 +248,7 @@ export default function CreateEstimateScreen() {
 
       {/* Progress Bar */}
       <View style={styles.progressBarBg}>
-        <View style={[styles.progressBarFill, { width: `${(currentStep / 4) * 100}%` }]} />
+        <View style={[styles.progressBarFill, { width: `${(currentStep / 3) * 100}%` }]} />
       </View>
 
       <ScrollView
@@ -282,10 +297,15 @@ export default function CreateEstimateScreen() {
                       setIncludePlumbing(item.name === 'Kitchen' || item.name === 'Bathroom');
                     }}
                   >
+                    {isSelected && (
+                      <View style={styles.roomCardCheckmark}>
+                        <Ionicons name="checkmark-circle" size={14} color="#C9922A" />
+                      </View>
+                    )}
                     <Ionicons
                       name={item.icon as any}
                       size={26}
-                      color={isSelected ? '#000000' : '#C9922A'}
+                      color={isSelected ? '#C9922A' : '#5D5D5D'}
                       style={styles.roomIcon}
                     />
                     <Text style={[styles.roomText, isSelected && styles.roomTextSelected]} allowFontScaling={false}>
@@ -297,7 +317,6 @@ export default function CreateEstimateScreen() {
             </View>
           </View>
         )}
-
         {/* STEP 2: Room dimensions */}
         {currentStep === 2 && (
           <View style={styles.stepContainer}>
@@ -308,137 +327,65 @@ export default function CreateEstimateScreen() {
               Dimensions are essential to calculate floor and wall square meters accurately.
             </Text>
 
-            <View style={styles.dimensionsLayout}>
+            <View style={{ gap: 12, marginTop: 8 }}>
               {[
-                { label: 'LENGTH (meters)', val: length, setter: setLength, placeholder: '4.5' },
-                { label: 'WIDTH (meters)', val: width, setter: setWidth, placeholder: '3.5' },
-                { label: 'HEIGHT (meters)', val: height, setter: setHeight, placeholder: '2.8' },
+                { label: 'Room Length', val: length, setter: setLength, placeholder: '4.5', desc: 'Front-to-back distance', icon: 'swap-horizontal-outline' },
+                { label: 'Room Width', val: width, setter: setWidth, placeholder: '3.5', desc: 'Side-to-side distance', icon: 'swap-vertical-outline' },
+                { label: 'Ceiling Height', val: height, setter: setHeight, placeholder: '2.8', desc: 'Floor-to-ceiling height', icon: 'resize-outline' },
               ].map((dim) => (
-                <View key={dim.label} style={styles.dimensionBox}>
-                  <Text style={styles.label} allowFontScaling={false}>
-                    {dim.label}
-                  </Text>
-                  <TextInput
-                    style={styles.numberInput}
-                    keyboardType="decimal-pad"
-                    value={dim.val}
-                    placeholder={dim.placeholder}
-                    placeholderTextColor="#5D5D5D"
-                    onChangeText={dim.setter}
-                  />
-                </View>
-              ))}
-            </View>
-
-            <View style={styles.calcPreviewBox}>
-              <View style={styles.calcRow}>
-                <Text style={styles.calcLabel} allowFontScaling={false}>Estimated Floor Area:</Text>
-                <Text style={styles.calcValue} allowFontScaling={false}>
-                  {isNaN(parseFloat(length) * parseFloat(width))
-                    ? '0'
-                    : (parseFloat(length) * parseFloat(width)).toFixed(1)}{' '}
-                  sqm
-                </Text>
-              </View>
-              <View style={styles.calcRow}>
-                <Text style={styles.calcLabel} allowFontScaling={false}>Estimated Wall Area:</Text>
-                <Text style={styles.calcValue} allowFontScaling={false}>
-                  {isNaN(2 * (parseFloat(length) + parseFloat(width)) * parseFloat(height))
-                    ? '0'
-                    : (2 * (parseFloat(length) + parseFloat(width)) * parseFloat(height)).toFixed(1)}{' '}
-                  sqm
-                </Text>
-              </View>
-            </View>
-          </View>
-        )}
-
-        {/* STEP 3: Renovation Complexity */}
-        {currentStep === 3 && (
-          <View style={styles.stepContainer}>
-            <Text style={styles.introHeading} allowFontScaling={false}>
-              Select complexity level
-            </Text>
-            <Text style={styles.sectionSubtitle} allowFontScaling={false}>
-              This allows Ziora to estimate materials cost and work hours accurately.
-            </Text>
-
-            <View style={styles.complexityWrapper}>
-              {RENOVATION_COMPLEXITIES.map((item) => {
-                const isSelected = complexity === item;
-                return (
-                  <Pressable
-                    key={item}
-                    style={[styles.complexityCard, isSelected && styles.complexityCardSelected]}
-                    onPress={() => setComplexity(item)}
-                  >
-                    <View style={styles.complexityHeaderRow}>
-                      <Ionicons
-                        name={isSelected ? 'radio-button-on' : 'radio-button-off'}
-                        size={20}
-                        color={isSelected ? '#C9922A' : '#5D5D5D'}
-                      />
-                      <Text
-                        style={[styles.complexityName, isSelected && styles.complexityNameActive]}
-                        allowFontScaling={false}
-                      >
-                        {item}
-                      </Text>
+                <View key={dim.label} style={styles.dimensionCard}>
+                  <View style={styles.dimLeft}>
+                    <View style={styles.dimIconBg}>
+                      <Ionicons name={dim.icon as any} size={18} color="#C9922A" />
                     </View>
-                    <Text style={styles.complexityDetail} allowFontScaling={false}>
-                      {COMPLEXITY_DETAILS[item]}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-        )}
-
-        {/* STEP 4: Quality selection by category (COMMENTED OUT: NOT IN API)
-        {currentStep === 4 && (
-          <View style={styles.stepContainer}>
-            <Text style={styles.introHeading} allowFontScaling={false}>
-              Material quality by category
-            </Text>
-            <Text style={styles.sectionSubtitle} allowFontScaling={false}>
-              You can mix tiers depending on what materials matter most in your space.
-            </Text>
-
-            <View style={styles.materialBlock}>
-              {MATERIAL_CATEGORIES.map((category) => (
-                <View key={category.key} style={styles.materialRow}>
-                  <Text style={styles.materialLabel} allowFontScaling={false}>
-                    {category.label}
-                  </Text>
-                  <View style={styles.tierSelectorGroup}>
-                    {QUALITY_TIERS.map((tier) => {
-                      const isActive = materialSelections[category.key] === tier;
-                      return (
-                        <Pressable
-                          key={tier}
-                          style={[styles.tierOption, isActive && styles.tierOptionActive]}
-                          onPress={() => setMaterialTier(category.key, tier)}
-                        >
-                          <Text
-                            style={[styles.tierOptionText, isActive && styles.tierOptionTextActive]}
-                            allowFontScaling={false}
-                          >
-                            {tier}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
+                    <View>
+                      <Text style={styles.dimTitle} allowFontScaling={false}>{dim.label}</Text>
+                      <Text style={styles.dimDesc} allowFontScaling={false}>{dim.desc}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.dimInputContainer}>
+                    <TextInput
+                      style={styles.dimTextInput}
+                      keyboardType="decimal-pad"
+                      value={dim.val}
+                      placeholder={dim.placeholder}
+                      placeholderTextColor="#5D5D5D"
+                      onChangeText={(text) => handleNumberChange(text, dim.setter)}
+                    />
+                    <Text style={styles.dimUnit} allowFontScaling={false}>m</Text>
                   </View>
                 </View>
               ))}
             </View>
+
+            {/*
+            <View style={styles.calcPreviewBox}>
+              <View style={styles.calcRow}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Ionicons name="grid-outline" size={14} color="#8E8E93" />
+                  <Text style={styles.calcLabel} allowFontScaling={false}>Estimated Floor Area:</Text>
+                </View>
+                <Text style={styles.calcValue} allowFontScaling={false}>
+                  Floor Area sqm
+                </Text>
+              </View>
+              <View style={styles.calcRow}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Ionicons name="git-commit-outline" size={14} color="#8E8E93" />
+                  <Text style={styles.calcLabel} allowFontScaling={false}>Estimated Wall Area:</Text>
+                </View>
+                <Text style={styles.calcValue} allowFontScaling={false}>
+                  Wall Area sqm
+                </Text>
+              </View>
+            </View>
+            */}
           </View>
         )}
-        */}
 
-        {/* STEP 4: Options & Contingency */}
-        {currentStep === 4 && (
+
+        {/* STEP 3: Options & Contingency */}
+        {currentStep === 3 && (
           <View style={styles.stepContainer}>
             <Text style={styles.introHeading} allowFontScaling={false}>
               Included scope of work
@@ -469,7 +416,7 @@ export default function CreateEstimateScreen() {
             </View>
 
             <Text style={styles.introHeading} allowFontScaling={false}>
-              Contingency buffer (%)
+              Contingency Percent (%)
             </Text>
             <Text style={styles.sectionSubtitle} allowFontScaling={false}>
               A percentage added for unexpected costs. 10% is standard.
@@ -479,12 +426,12 @@ export default function CreateEstimateScreen() {
                 style={styles.textInput}
                 keyboardType="number-pad"
                 value={contingency}
-                onChangeText={setContingency}
+                onChangeText={(text) => handleNumberChange(text, setContingency)}
                 placeholder="10"
                 placeholderTextColor="#5D5D5D"
               />
               <Text style={styles.contingencyPercentSign} allowFontScaling={false}>
-                % Buffer
+                % Contingency
               </Text>
             </View>
           </View>
@@ -507,13 +454,13 @@ export default function CreateEstimateScreen() {
           ) : (
             <>
               <Ionicons
-                name={currentStep === 4 ? 'sparkles' : 'arrow-forward'}
+                name={currentStep === 3 ? 'sparkles' : 'arrow-forward'}
                 size={20}
                 color="#000000"
                 style={{ marginRight: 6 }}
               />
               <Text style={styles.ctaButtonText} allowFontScaling={false}>
-                {currentStep === 4 ? 'Generate Smart Estimate' : 'Continue'}
+                {currentStep === 3 ? 'Generate Smart Estimate' : 'Continue'}
               </Text>
             </>
           )}
@@ -675,7 +622,7 @@ const styles = StyleSheet.create({
   },
   roomCardSelected: {
     borderColor: '#C9922A',
-    backgroundColor: '#C9922A',
+    backgroundColor: 'rgba(201, 146, 42, 0.05)',
   },
   roomIcon: {
     marginBottom: 8,
@@ -687,7 +634,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   roomTextSelected: {
-    color: '#000000',
+    color: '#C9922A',
+  },
+  roomCardCheckmark: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
   },
   dimensionsLayout: {
     flexDirection: 'row',
@@ -874,5 +826,69 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.75,
+  },
+  dimensionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#0F0F0F',
+    borderWidth: 1,
+    borderColor: '#1D1D1D',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  dimLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  dimIconBg: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: 'rgba(201, 146, 42, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dimTitle: {
+    color: '#FFFFFF',
+    fontFamily: 'Manrope',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  dimDesc: {
+    color: '#8E8E93',
+    fontFamily: 'Manrope',
+    fontSize: 10,
+    marginTop: 2,
+  },
+  dimInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: 90,
+    height: 40,
+    backgroundColor: '#070707',
+    borderWidth: 1,
+    borderColor: '#242424',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+  },
+  dimTextInput: {
+    flex: 1,
+    color: '#FFFFFF',
+    fontFamily: 'Manrope',
+    fontSize: 14,
+    fontWeight: '800',
+    textAlign: 'right',
+    padding: 0,
+  },
+  dimUnit: {
+    color: '#8E8E93',
+    fontFamily: 'Manrope',
+    fontSize: 12,
+    fontWeight: '700',
+    marginLeft: 4,
   },
 });
