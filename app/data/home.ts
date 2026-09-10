@@ -190,20 +190,69 @@ export const footerNavItems: HomeNavItem[] = [
     id: 'home',
     label: 'Home',
     icon: require('@/assets/images/home.png'),
+    iconName: 'home-outline',
+  },
+  {
+    id: 'favorite',
+    label: 'Favorites',
+    icon: require('@/assets/images/star.png'),
+    iconName: 'heart-outline',
+  },
+  {
+    id: 'projects',
+    label: 'Projects',
+    icon: require('@/assets/images/fav.png'),
+    iconName: 'folder-outline',
   },
   {
     id: 'cart',
     label: 'Cart',
     icon: require('@/assets/images/Cart.png'),
-  },
-  {
-    id: 'favorite',
-    label: 'Favorite',
-    icon: require('@/assets/images/fav.png'),
+    iconName: 'cart-outline',
   },
   {
     id: 'profile',
     label: 'Profile',
     icon: require('@/assets/images/Profile.png'),
+    iconName: 'person-circle-outline',
   },
 ];
+
+const LOCAL_PRODUCT_IMAGES = [
+  require('@/assets/images/product1.jpeg'),
+  require('@/assets/images/product2.jpeg'),
+  require('@/assets/images/product3.jpeg'),
+  require('@/assets/images/product4.jpeg'),
+  require('@/assets/images/product5.jpeg'),
+  require('@/assets/images/product6.jpeg'),
+  require('@/assets/images/product7.jpeg'),
+  require('@/assets/images/product8.jpeg'),
+  require('@/assets/images/product9.jpeg'),
+  require('@/assets/images/product10.jpeg'),
+];
+
+export const getLocalProductImage = (productId: string) => {
+  let hash = 0;
+  const str = productId || '';
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % LOCAL_PRODUCT_IMAGES.length;
+  return LOCAL_PRODUCT_IMAGES[index];
+};
+
+export const mapApiProduct = (item: any): HomeProduct => {
+  const imageSource = item.primaryImageUrl ? { uri: item.primaryImageUrl } : { uri: '' };
+
+  return {
+    id: item.id,
+    name: item.name,
+    price: item.priceDisplay || (item.price != null ? `₦${Number(item.price).toLocaleString()}` : 'Request Price'),
+    image: imageSource,
+    description: item.description || item.shortDescription || 'No description available.',
+    review: 'Highly recommended by verified buyers for build quality.',
+    availability: item.inStock ? 'In stock - Limited units available' : 'Out of stock',
+    delivery: '15 days after payment confirmation',
+    colors: item.color ? [item.color] : ['#C9922A', '#E8E8E8', '#1A1A1A'],
+  };
+};

@@ -14,6 +14,8 @@ type ProductCardProps = {
   onFavoritePress?: (product: HomeProduct) => void;
 };
 
+const GOLD = '#C9922A';
+
 function ProductCardComponent({
   product,
   width = 160,
@@ -22,77 +24,59 @@ function ProductCardComponent({
   onPress,
   onFavoritePress,
 }: ProductCardProps) {
-  const scale = width / 160;
-  const cardHeight = 122 * scale;
-  const imageOffset = 8 * scale;
-  const imageTop = -17 * scale;
-  const imageHeight = 93.73 * scale;
-  const detailsHeight = 100 * scale;
-  const actionButtonSize = 18 * scale;
-  const actionIconSize = Math.max(9, 10 * scale);
   const actionIconName =
     actionVariant === 'delete'
       ? 'trash-outline'
       : isFavorite
         ? 'heart'
         : 'heart-outline';
+  
   const actionIconColor =
-    actionVariant === 'delete' || isFavorite ? '#C9922A' : '#FFFFFF';
+    actionVariant === 'delete' ? GOLD : isFavorite ? GOLD : '#FFFFFF';
 
   return (
     <Pressable
       onPress={() => onPress?.(product)}
       style={({ pressed }) => [
         styles.card,
-        {
-          width,
-          height: cardHeight,
-        },
+        { width },
         pressed && styles.pressed,
       ]}
     >
-      <View style={[styles.detailsPanel, { width, height: detailsHeight }]}>
+      {/* Image Panel */}
+      <View style={styles.imagePanel}>
+        <Image source={product.image} style={styles.productImage} contentFit="cover" />
+        
+        {/* Favorite Icon overlay */}
+        <Pressable
+          onPress={event => {
+            event.stopPropagation();
+            onFavoritePress?.(product);
+          }}
+          style={styles.favoriteButton}
+          hitSlop={8}
+        >
+          <Ionicons
+            name={actionIconName}
+            size={14}
+            color={actionIconColor}
+          />
+        </Pressable>
+      </View>
+
+      {/* Details Panel */}
+      <View style={styles.detailsPanel}>
         <Text style={styles.name} numberOfLines={1} allowFontScaling={false}>
           {product.name}
         </Text>
         <Text style={styles.price} numberOfLines={1} allowFontScaling={false}>
           {product.price}
         </Text>
-      </View>
-
-      <View
-        style={[
-          styles.imagePanel,
-          {
-            top: imageTop,
-            left: imageOffset,
-            width: width - imageOffset * 2,
-            height: imageHeight,
-          },
-        ]}
-      >
-        <Image source={product.image} style={styles.productImage} contentFit="cover" />
-        <Pressable
-          onPress={event => {
-            event.stopPropagation();
-            onFavoritePress?.(product);
-          }}
-          style={[
-            styles.favoriteButton,
-            {
-              width: actionButtonSize,
-              height: actionButtonSize,
-              borderRadius: actionButtonSize / 2,
-            },
-          ]}
-          hitSlop={8}
-        >
-          <Ionicons
-            name={actionIconName}
-            size={actionIconSize}
-            color={actionIconColor}
-          />
-        </Pressable>
+        {product.availability ? (
+          <Text style={styles.status} numberOfLines={1} allowFontScaling={false}>
+            {product.availability}
+          </Text>
+        ) : null}
       </View>
     </Pressable>
   );
@@ -102,16 +86,19 @@ export const ProductCard = memo(ProductCardComponent);
 
 const styles = StyleSheet.create({
   card: {
-    marginBottom: 19,
-    // marginTop:13,
+    backgroundColor: '#121217',
+    borderRadius: 10,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#1C1C24',
+    height: 205,
+    marginBottom: 12,
   },
   imagePanel: {
-    position: 'absolute',
-    top: -17,
-    borderRadius: 8,
-    overflow: 'hidden',
-    backgroundColor: '#252523',
-    zIndex: 2,
+    width: '100%',
+    height: 125,
+    backgroundColor: '#1E1E24',
+    position: 'relative',
   },
   productImage: {
     width: '100%',
@@ -119,36 +106,40 @@ const styles = StyleSheet.create({
   },
   favoriteButton: {
     position: 'absolute',
-    top: 5,
-    right: 5,
-    backgroundColor: 'rgba(37, 37, 35, 0.78)',
+    top: 8,
+    right: 8,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 10,
   },
   detailsPanel: {
-    position: 'absolute',
-    left: 0,
-    bottom: 0,
-    borderRadius: 8,
-    backgroundColor: '#252523',
-    justifyContent: 'flex-end',
-    paddingHorizontal: 9,
-    paddingBottom: 8,
+    padding: 10,
+    justifyContent: 'center',
+    gap: 2,
   },
   name: {
-    color: '#AAAAAA',
+    color: '#FFFFFF',
     fontFamily: 'Manrope',
-    fontSize: 12,
-    fontWeight: '400',
-    lineHeight: 12,
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 16,
   },
   price: {
-    color: '#C9922A',
+    color: GOLD,
     fontFamily: 'Manrope',
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '700',
-    lineHeight: 13,
-    marginTop: 3,
+    lineHeight: 15,
+  },
+  status: {
+    color: 'rgba(255,255,255,0.35)',
+    fontFamily: 'Manrope',
+    fontSize: 9,
+    lineHeight: 11,
   },
   pressed: {
     opacity: 0.88,

@@ -64,11 +64,15 @@ async function handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
     let errorMsg = `Request failed with status ${response.status}`;
     try {
       const text = await response.text();
+      console.error(`[API ERROR RAW BODY] ${response.url}:`, text);
       try {
         const body = JSON.parse(text);
-        errorMsg = body?.message || errorMsg;
+        errorMsg = body?.message || body?.title || errorMsg;
+        if (body?.errors) {
+          errorMsg += ` - Errors: ${JSON.stringify(body.errors)}`;
+        }
       } catch (_) {
-        if (text && text.length < 150) {
+        if (text && text.length < 300) {
           errorMsg = text;
         }
       }
@@ -151,6 +155,22 @@ export const ApiService = {
       headers: {
         'Content-Type': 'application/json',
       },
+    });
+    return handleResponse<any[]>(response);
+  },
+
+  async getAiProjects(): Promise<ApiResponse<any[]>> {
+    const token = await TokenService.getAccessToken();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'accept': '*/*',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    const response = await fetch(`${BASE_URL}/ai/projects`, {
+      method: 'GET',
+      headers,
     });
     return handleResponse<any[]>(response);
   },
@@ -550,7 +570,7 @@ export const ApiService = {
     return handleResponse<any>(response);
   },
 
-  async uploadRoomImage(uri: string): Promise<ApiResponse<{ url: string }>> {
+  async uploadRoomImage(uri: string): Promise<ApiResponse<{ url?: string; imageUrl?: string }>> {
     const token = await TokenService.getAccessToken();
     const headers: Record<string, string> = {
       'accept': '*/*',
@@ -575,7 +595,7 @@ export const ApiService = {
       headers,
       body: formData,
     });
-    return handleResponse<{ url: string }>(response);
+    return handleResponse<{ url?: string; imageUrl?: string }>(response);
   },
 
   async uploadDocument(uri: string): Promise<ApiResponse<{ url: string }>> {
@@ -680,6 +700,7 @@ export const ApiService = {
     prompt: string;
     sourceImageUrl?: string | null;
     durationSeconds: number;
+    style?: string | null;
     contextTags?: string[];
   }): Promise<ApiResponse<any>> {
     const token = await TokenService.getAccessToken();
@@ -701,20 +722,12 @@ export const ApiService = {
   async createRenovationEstimate(payload: {
     projectName: string;
     roomType: string;
-    lengthMeters: number;
-    widthMeters: number;
-    heightMeters: number;
-    finishLevel: string;
-    includeFlooring: boolean;
-    includePainting: boolean;
-    includeElectrical: boolean;
-    includePlumbing: boolean;
+    lengthM: number;
+    widthM: number;
+    heightM: number;
+    qualityTier: number;
     contingencyPercent: number;
-    roomDimensions: {
-      length: number;
-      width: number;
-      height: number;
-    };
+    notes?: string;
   }): Promise<ApiResponse<any>> {
     const token = await TokenService.getAccessToken();
     const headers: Record<string, string> = {
@@ -724,10 +737,45 @@ export const ApiService = {
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
+
+    const legacyLabels = ['Cosmetic Refresh', 'Standard Renovation', 'Major Renovation', 'Complete Remodel'];
+    const guideLabels = ['Budget', 'Standard', 'Premium', 'Luxury'];
+
+    const bodyPayload = {
+      ...payload,
+      // Dimension alias variations to satisfy all backend C# DTO bindings
+      lengthMeters: payload.lengthM,
+      widthMeters: payload.widthM,
+      heightMeters: payload.heightM,
+      length: payload.lengthM,
+      width: payload.widthM,
+      height: payload.heightM,
+      roomDimensions: {
+        length: payload.lengthM,
+        width: payload.widthM,
+        height: payload.heightM,
+      },
+      // Quality/Finish variations (CamelCase & PascalCase) to satisfy all backend schemas
+      qualityTier: payload.qualityTier,
+      QualityTier: payload.qualityTier,
+      quality: payload.qualityTier,
+      Quality: payload.qualityTier,
+      tier: payload.qualityTier,
+      Tier: payload.qualityTier,
+      finishLevel: legacyLabels[payload.qualityTier] || 'Standard Renovation',
+      FinishLevel: legacyLabels[payload.qualityTier] || 'Standard Renovation',
+      complexity: legacyLabels[payload.qualityTier] || 'Standard Renovation',
+      Complexity: legacyLabels[payload.qualityTier] || 'Standard Renovation',
+      qualityTierName: guideLabels[payload.qualityTier] || 'Standard',
+      QualityTierName: guideLabels[payload.qualityTier] || 'Standard',
+    };
+
+    console.log('[API DEBUG] createRenovationEstimate payload:', JSON.stringify(bodyPayload));
+
     const response = await fetch(`${BASE_URL}/ai/renovation-estimates`, {
       method: 'POST',
       headers,
-      body: JSON.stringify(payload),
+      body: JSON.stringify(bodyPayload),
     });
     return handleResponse<any>(response);
   },
@@ -886,7 +934,9 @@ export const ApiService = {
       headers,
       body: JSON.stringify(payload),
     });
-    return handleResponse<any>(response);
+    const result = await handleResponse<any>(response);
+    console.log('[API DEBUG] verifyInspectionPayment response:', JSON.stringify(result, null, 2));
+    return result;
   },
 
   async bookInspection(payload: {
@@ -898,8 +948,10 @@ export const ApiService = {
     siteState: string;
     preferredDate1: string;
     preferredDate2: string;
+    propertyType: string;
+    consultationType: number;
     uploadedFileUrls?: string[];
-    paymentReference: string;
+    paymentReference?: string;
     additionalNotes?: string;
   }): Promise<ApiResponse<any>> {
     const token = await TokenService.getAccessToken();
@@ -915,6 +967,187 @@ export const ApiService = {
       headers,
       body: JSON.stringify(payload),
     });
+    return handleResponse<any>(response);
+  },
+
+  async initializeInspectionPayment(inspectionId: string, email: string): Promise<ApiResponse<{ authorizationUrl: string; reference: string }>> {
+    const token = await TokenService.getAccessToken();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'accept': '*/*',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    const response = await fetch(`${BASE_URL}/inspections/${inspectionId}/initialize-payment`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ email }),
+    });
+    return handleResponse<any>(response);
+  },
+
+  async getCheckout(promoCode?: string | null): Promise<any> {
+    const token = await TokenService.getAccessToken();
+    const headers: Record<string, string> = {
+      'accept': 'application/json',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    const url = promoCode
+      ? `${BASE_URL}/Checkout?promoCode=${encodeURIComponent(promoCode)}`
+      : `${BASE_URL}/Checkout`;
+    const response = await fetch(url, {
+      method: 'GET',
+      headers,
+    });
+
+    let body: any;
+    try {
+      body = await response.json();
+    } catch (err) {
+      if (response.ok) return null;
+      throw new ApiError('Failed to parse checkout response.', false);
+    }
+    if (!response.ok) {
+      const errorMsg = body?.message || `Request failed with status ${response.status}`;
+      throw new ApiError(errorMsg, false);
+    }
+    return body;
+  },
+
+  async validatePromoCode(code: string): Promise<ApiResponse<any>> {
+    const token = await TokenService.getAccessToken();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'accept': '*/*',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    const response = await fetch(`${BASE_URL}/Checkout/validate-promo`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ code }),
+    });
+    return handleResponse<any>(response);
+  },
+
+  async initiateCheckoutPayment(payload: any): Promise<ApiResponse<any>> {
+    const token = await TokenService.getAccessToken();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'accept': '*/*',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    const response = await fetch(`${BASE_URL}/Checkout/payment`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<any>(response);
+  },
+
+  async verifyCheckoutPayment(reference: string): Promise<ApiResponse<any>> {
+    const token = await TokenService.getAccessToken();
+    const headers: Record<string, string> = {
+      'accept': '*/*',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    const response = await fetch(`${BASE_URL}/Checkout/payment/paystack/verify/${reference}`, {
+      method: 'GET',
+      headers,
+    });
+    return handleResponse<any>(response);
+  },
+
+  async bookConsultation(payload: {
+    typeKey: string;
+    scheduledStart: string;
+    projectId?: string | null;
+    contactName: string;
+    contactPhone: string;
+    contactEmail: string;
+    propertyType: string;
+    siteAddress?: string;
+    siteCity?: string;
+    siteState?: string;
+    notes?: string;
+  }): Promise<ApiResponse<any>> {
+    const token = await TokenService.getAccessToken();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'accept': '*/*',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    const response = await fetch(`${BASE_URL}/consultations/book`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<any>(response);
+  },
+
+  async initializeConsultationPayment(
+    consultationId: string,
+    consultationToken: string,
+    email: string
+  ): Promise<ApiResponse<any>> {
+    const token = await TokenService.getAccessToken();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'accept': '*/*',
+      'X-Consultation-Token': consultationToken,
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    const response = await fetch(`${BASE_URL}/consultations/${consultationId}/initialize-payment`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ email }),
+    });
+    return handleResponse<any>(response);
+  },
+
+  async verifyConsultationPayment(payload: { reference: string }): Promise<ApiResponse<any>> {
+    const token = await TokenService.getAccessToken();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'accept': '*/*',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    const response = await fetch(`${BASE_URL}/consultations/verify-payment`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<any>(response);
+  },
+
+  async getInspectionAvailability(
+    consultationType: number,
+    date: string,
+    state: string
+  ): Promise<ApiResponse<any>> {
+    const response = await fetch(
+      `${BASE_URL}/inspections/availability?consultationType=${consultationType}&date=${date}&state=${encodeURIComponent(state)}`,
+      {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }
+    );
     return handleResponse<any>(response);
   }
 };

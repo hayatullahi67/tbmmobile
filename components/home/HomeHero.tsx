@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import { memo } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 const GOLD = '#C9922A';
 
@@ -15,52 +16,54 @@ type HomeHeroProps = {
 function HomeHeroComponent({
   searchValue,
   onSearchChange,
-  horizontalPadding = 4,
+  horizontalPadding = 0,
 }: HomeHeroProps) {
+  const router = useRouter();
+
   return (
-    <View style={styles.hero}>
-      {/* Background photo */}
-      <Image
-        source={require('@/assets/images/product7.jpeg')}
-        style={styles.heroImage}
-        contentFit="cover"
-      />
-
-      {/* Black gradient — very dark at top, fades to transparent at middle */}
-      <LinearGradient
-        colors={[
-          'rgba(0,0,0,0.95)',
-          'rgba(0,0,0,0.75)',
-          'rgba(0,0,0,0.30)',
-          'rgba(0,0,0,0.0)',
-        ]}
-        locations={[0, 0.30, 0.55, 1]}
-        style={styles.gradient}
-      />
-
-      {/* Content */}
-      <View style={[styles.content, { paddingHorizontal: horizontalPadding }]}>
-
-        {/* Title — dark gold, same text */}
-        <Text style={styles.title} allowFontScaling={false}>
-          Spaces Built Smarter
-        </Text>
-
-        {/* Search bar — search icon in dark gold */}
-        <View style={styles.searchBox}>
-          <Ionicons name="search-outline" size={13} color={GOLD} />
-          <TextInput
-            value={searchValue}
-            onChangeText={onSearchChange}
-            style={styles.searchInput}
-            placeholder="Search item"
-            placeholderTextColor="#7A7A7A"
-            autoCapitalize="none"
-            autoCorrect={false}
-            allowFontScaling={false}
-          />
-        </View>
+    <View style={[styles.container, { paddingHorizontal: horizontalPadding }]}>
+      
+      {/* ── SEARCH EXPERIENCE ── */}
+      <View style={styles.searchBar}>
+        <Ionicons name="search-outline" size={20} color="rgba(255,255,255,0.4)" style={styles.searchIcon} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search designs, services and vanities"
+          placeholderTextColor="rgba(255,255,255,0.3)"
+          value={searchValue}
+          onChangeText={onSearchChange}
+          autoCapitalize="none"
+          autoCorrect={false}
+          allowFontScaling={false}
+        />
+        <Pressable style={styles.filterButton} onPress={() => router.push('/screens/AllProductsScreen')}>
+          <Ionicons name="options-outline" size={20} color="rgba(255,255,255,0.7)" />
+        </Pressable>
       </View>
+
+      {/* ── HERO VISUALIZER BANNER ── */}
+      <Pressable style={styles.heroCard} onPress={() => router.push('/screens/ziora-ai/ZioraHomeScreen')}>
+        <Image source={require('@/assets/images/visualizer_after.png')} style={styles.heroBgImage} contentFit="cover" />
+        
+        {/* Professional Horizontal Gradient Overlay */}
+        <LinearGradient
+          colors={['rgba(0,0,0,0.85)', 'rgba(0,0,0,0.45)', 'rgba(0,0,0,0.1)', 'transparent']}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 0.8, y: 0.5 }}
+          style={StyleSheet.absoluteFill}
+        />
+
+        {/* Content overlay */}
+        <View style={styles.heroTextContainer}>
+          <Text style={styles.heroTag} allowFontScaling={false}>ZIORA AI</Text>
+          <Text style={styles.heroHeading} allowFontScaling={false}>
+            Design your{'\n'}space before{'\n'}you build.
+          </Text>
+          <View style={styles.heroButton}>
+            <Text style={styles.heroButtonText} allowFontScaling={false}>Start Designing</Text>
+          </View>
+        </View>
+      </Pressable>
     </View>
   );
 }
@@ -68,55 +71,86 @@ function HomeHeroComponent({
 export const HomeHero = memo(HomeHeroComponent);
 
 const styles = StyleSheet.create({
-  hero: {
-    height: 271,
-    overflow: 'hidden',
+  container: {
+    width: '100%',
     backgroundColor: '#07070A',
   },
-  heroImage: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  gradient: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  content: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 18,
-  },
-
-  // ── Title — dark gold ─────────────────────────────────────────────────────────
-  title: {
-    color: "white",
-    fontFamily: 'Manrope',
-    fontSize: 20,
-    fontWeight: '700',
-    lineHeight: 20.5,
-    textAlign: 'center',
-    marginBottom: 29,
-  },
-
-  // ── Search bar — gold search icon ─────────────────────────────────────────────
-  searchBox: {
-    width: '100%',
-    height: 45,
-    borderRadius: 11,
-    backgroundColor: '#252523',
+  // ── Search experience ──
+  searchBar: {
+    height: 48,
+    borderRadius: 8,
+    backgroundColor: '#121217',
+    borderWidth: 1,
+    borderColor: '#1C1C24',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(201,146,42,0.25)',
+    paddingHorizontal: 14,
+    marginTop: 16,
+  },
+  searchIcon: {
+    marginRight: 10,
   },
   searchInput: {
     flex: 1,
-    height: '100%',
     color: '#FFFFFF',
+    fontSize: 12,
     fontFamily: 'Manrope',
+    height: '100%',
+  },
+  filterButton: {
+    padding: 4,
+  },
+
+  // ── Hero banner card ──
+  heroCard: {
+    height: 185,
+    borderRadius: 12,
+    marginTop: 16,
+    overflow: 'hidden',
+    position: 'relative',
+    borderWidth: 1,
+    borderColor: '#1C1C24',
+  },
+  heroBgImage: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    width: '100%',
+    height: '100%',
+  },
+  heroTextContainer: {
+    position: 'absolute',
+    left: 16,
+    bottom: 16,
+    zIndex: 5,
+  },
+  heroTag: {
+    color: GOLD,
+    fontSize: 14,
+    fontWeight: '700',
+    fontFamily: 'Manrope',
+    letterSpacing: 1.2,
+  },
+  heroHeading: {
+    color: '#FFFFFF',
+    fontSize: 22,
+    fontWeight: '700',
+    lineHeight: 26,
+    fontFamily: 'Manrope',
+    marginTop: 4,
+  },
+  heroButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 15,
+    backgroundColor: GOLD,
+    alignSelf: 'flex-start',
+    marginTop: 10,
+  },
+  heroButtonText: {
+    color: '#FFFFFF',
     fontSize: 10,
-    fontWeight: '400',
-    marginLeft: 8,
-    padding: 0,
+    fontWeight: '700',
+    fontFamily: 'Manrope',
   },
 });

@@ -139,9 +139,11 @@ export default function ProfileScreen() {
   };
 
   const handleFooterSelect = (itemId: string) => {
+    if (itemId === 'profile') return;
     if (itemId === 'home') router.replace('/screens/HomeScreen');
-    if (itemId === 'cart') router.push('/screens/CartScreen');
     if (itemId === 'favorite') router.push('/screens/FavoriteScreen');
+    if (itemId === 'projects') router.push('/screens/MyProjectsScreen');
+    if (itemId === 'cart') router.push('/screens/CartScreen');
   };
 
   const handleLogout = async () => {

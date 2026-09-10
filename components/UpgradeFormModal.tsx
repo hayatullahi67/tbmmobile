@@ -55,6 +55,9 @@ export const UpgradeFormModal: React.FC<UpgradeFormModalProps> = ({ visible, onC
     <Modal visible={visible} animationType="slide" transparent>
       <View style={styles.backdrop}>
         <View style={styles.container}>
+          {/* Grab Handle */}
+          <View style={styles.handle} />
+          
           <View style={styles.header}>
             <Text style={styles.title}>{title}</Text>
             <Pressable onPress={onClose} style={styles.closeBtn}>
@@ -111,17 +114,27 @@ export const UpgradeFormModal: React.FC<UpgradeFormModalProps> = ({ visible, onC
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.85)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    justifyContent: 'flex-end',
   },
   container: {
-    width: '90%',
+    width: '100%',
     backgroundColor: '#0F0F0F',
-    borderRadius: 16,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     borderWidth: 1,
     borderColor: '#1D1D1D',
-    padding: 20,
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 28,
+  },
+  handle: {
+    width: 38,
+    height: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 20,
   },
   header: {
     flexDirection: 'row',

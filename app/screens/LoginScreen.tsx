@@ -80,9 +80,7 @@ export default function LoginScreen() {
         if (user) {
           await TokenService.saveUser(user);
         }
-        showFeedback('success', 'Success', response.message || 'Login successful!', () => {
-          router.replace('/screens/HomeScreen');
-        });
+        router.replace('/screens/HomeScreen');
       } else {
         showFeedback('error', 'Login Failed', response.message || 'An unknown error occurred.');
       }
@@ -108,7 +106,7 @@ export default function LoginScreen() {
 
         {/* ── Full-screen background ── */}
         <Image
-          source={require('@/assets/images/welcomebg.png')}
+          source={require('@/assets/images/modern_interior_dark.png')}
           style={styles.bgImage}
           contentFit="cover"
         />
@@ -116,12 +114,12 @@ export default function LoginScreen() {
         {/* ── Gradient overlay ── */}
         <LinearGradient
           colors={[
-            'rgba(0,0,0,0.10)',
-            'rgba(0,0,0,0.55)',
-            'rgba(0,0,0,0.88)',
+            'rgba(0,0,0,0.65)',
+            'rgba(0,0,0,0.3)',
+            'rgba(0,0,0,0.75)',
             '#000000',
           ]}
-          locations={[0, 0.3, 0.6, 1]}
+          locations={[0, 0.35, 0.7, 1]}
           style={styles.gradient}
         />
 
@@ -136,18 +134,13 @@ export default function LoginScreen() {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            {/* ── Brand — center inside scroll ── */}
+            {/* ── Brand ── */}
             <View style={styles.brand}>
-              <Image
-                source={require('@/assets/images/logo.png')}
-                style={styles.tbmLogo}
-                contentFit="contain"
-              />
               <Text style={styles.brandName} allowFontScaling={false}>
-                Z I O R A ( B O G A T )
+                Z I O R A
               </Text>
               <Text style={styles.brandTagline} allowFontScaling={false}>
-                AI VISUALIZER &amp; ESTIMATES
+                POWERED BY TBM BUILDING SERVICES
               </Text>
             </View>
 
@@ -294,30 +287,27 @@ const styles = StyleSheet.create({
 
   // ── Brand ────────────────────────────────────────────────────────────────────
   brand: {
-    alignItems: 'center',
-    // marginTop: 55,
-    marginBottom: 70,
-  },
-  tbmLogo: {
-    width: 60,
-    height: 60,
-    marginBottom: 10,
+    alignItems: 'flex-start',
+    marginTop: 15,
+    marginBottom: 50,
+    paddingHorizontal: 27,
   },
   brandName: {
     color: GOLD,
-    fontFamily: 'Manrope_500Medium',
-    fontSize: 20,
-    letterSpacing: 4,
-    lineHeight: 26,
+    fontFamily: 'Manrope_700Bold',
+    fontSize: 30,
+    letterSpacing: 5,
+    lineHeight: 36,
+    fontWeight: '700',
   },
   brandTagline: {
     color: '#FFFFFF',
     fontFamily: 'Manrope_600SemiBold',
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 1.5,
-    lineHeight: 14,
-    marginTop: 2,
-    opacity: 0.85,
+    lineHeight: 16,
+    marginTop: 4,
+    opacity: 0.75,
   },
 
   // ── Keyboard / scroll ────────────────────────────────────────────────────────
@@ -329,9 +319,8 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    justifyContent: 'flex-end',
-    // paddingBottom: 70,
-    marginBottom:70,
+    justifyContent: 'center',
+    paddingBottom: 50,
   },
 
   // ── Form ─────────────────────────────────────────────────────────────────────

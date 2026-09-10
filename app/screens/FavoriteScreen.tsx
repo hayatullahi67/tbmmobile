@@ -30,14 +30,16 @@ export default function FavoriteScreen() {
   const footerItems = useMemo(() => footerNavItems, []);
 
   const handleFooterSelect = (itemId: string) => {
+    if (itemId === 'favorite') return;
     if (itemId === 'home') {
       router.replace('/screens/HomeScreen');
     }
-
+    if (itemId === 'projects') {
+      router.push('/screens/MyProjectsScreen');
+    }
     if (itemId === 'cart') {
       router.push('/screens/CartScreen');
     }
-
     if (itemId === 'profile') {
       router.push('/screens/ProfileScreen');
     }

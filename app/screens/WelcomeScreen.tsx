@@ -4,11 +4,12 @@ import {
   Manrope_700Bold,
   useFonts,
 } from '@expo-google-fonts/manrope';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import {
   Dimensions,
+  Platform,
   Pressable,
   SafeAreaView,
   StyleSheet,
@@ -29,13 +30,17 @@ export default function WelcomeScreen() {
 
   if (!fontsLoaded) return null;
 
+  const handleBookConsultation = () => {
+    router.push('/screens/ziora-ai/BookConsultationScreen');
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.page}>
 
         {/* ── Full-screen background photo ── */}
         <Image
-          source={require('@/assets/images/welcomebg.png')}
+          source={require('@/assets/images/modern_interior_dark.png')}
           style={styles.bgImage}
           contentFit="cover"
         />
@@ -43,85 +48,78 @@ export default function WelcomeScreen() {
         {/* ── Gradient overlay — transparent top → solid black bottom ── */}
         <LinearGradient
           colors={[
-            'rgba(0,0,0,0.05)',
-            'rgba(0,0,0,0.25)',
+            'rgba(0,0,0,0.65)',
+            'rgba(0,0,0,0.3)',
             'rgba(0,0,0,0.75)',
             '#000000',
           ]}
-          locations={[0, 0.35, 0.65, 1]}
+          locations={[0, 0.35, 0.7, 1]}
           style={styles.gradient}
         />
 
-        {/* ── Brand — top center ── */}
+        {/* ── Brand — top left aligned ── */}
         <View style={styles.brand}>
-          <Image
-            source={require('@/assets/images/logo.png')}
-            style={styles.tbmLogo}
-            contentFit="contain"
-          />
           <Text style={styles.brandName} allowFontScaling={false}>
-            Z I O R A ( B O G A T )
+            Z I O R A
           </Text>
           <Text style={styles.brandTagline} allowFontScaling={false}>
-            AI VISUALIZER &amp; ESTIMATES
+            POWERED BY TBM BUILDING SERVICES
           </Text>
         </View>
 
         {/* ── Bottom content ── */}
         <View style={styles.content}>
+          
+          {/* Upper Text Block */}
+          <View style={styles.textContainer}>
+            {/* Headline */}
+            <Text style={styles.headline} allowFontScaling={false}>
+              Imagine.{'\n'}Design.{'\n'}
+              <Text style={styles.headlineGold}>Build.</Text>
+            </Text>
 
-          {/* Headline */}
-          <Text style={styles.headline} allowFontScaling={false}>
-            Imagine.{'\n'}Visualize.{'\n'}Build{' '}
-            <Text style={styles.headlineGold}>Extraordinary.</Text>
-          </Text>
-
-          {/* Description */}
-          <Text style={styles.description} allowFontScaling={false}>
-            AI-Powered visualization and accurate estimates for construction,
-            renovation &amp; interior projects.
-          </Text>
-
-          {/* Buttons */}
-          <View style={styles.buttons}>
-            <Pressable
-              onPress={() => router.push('/screens/LoginScreen')}
-              style={({ pressed }) => [styles.loginButton, pressed && styles.pressed]}
-            >
-              <Text style={styles.loginButtonText} allowFontScaling={false}>
-                Login
-              </Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => router.push('/screens/SignupScreen')}
-              style={({ pressed }) => [styles.createButton, pressed && styles.pressed]}
-            >
-              <Text style={styles.createButtonText} allowFontScaling={false}>
-                Create Account
-              </Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => router.replace('/screens/HomeScreen')}
-              style={({ pressed }) => [styles.guestButton, pressed && styles.pressed]}
-            >
-              <Text style={styles.guestText} allowFontScaling={false}>
-                Continue as Guest
-              </Text>
-            </Pressable>
+            {/* Description */}
+            <Text style={styles.description} allowFontScaling={false}>
+              Visualize your space, get{'\n'}intelligent estimates and bring{'\n'}your renovation to life.
+            </Text>
           </View>
 
-          {/* Divider */}
-          <View style={styles.rule} />
+          {/* Lower Action Block */}
+          <View style={styles.actionContainer}>
+            {/* Buttons */}
+            <View style={styles.buttons}>
+              <Pressable
+                onPress={() => router.push('/screens/LoginScreen')}
+                style={({ pressed }) => [styles.getStartedButton, pressed && styles.pressed]}
+              >
+                <Text style={styles.getStartedText} allowFontScaling={false}>
+                  Get Started
+                </Text>
+              </Pressable>
 
-          {/* Footer */}
-          <Text style={styles.footer} allowFontScaling={false}>
-            By continuing, you agree to our{'\n'}
-            <Text style={styles.footerLink}>Terms of Use</Text>
-            {' '}and{' '}
-            <Text style={styles.footerLink}>Privacy Policy.</Text>
-          </Text>
+              <Pressable
+                onPress={handleBookConsultation}
+                style={({ pressed }) => [styles.consultationButton, pressed && styles.pressed]}
+              >
+                <Text style={styles.consultationText} allowFontScaling={false}>
+                  Book a Consultation
+                </Text>
+              </Pressable>
+            </View>
+
+            {/* Guest entry link */}
+            <View style={styles.loginContainer}>
+              <Text style={styles.loginText} allowFontScaling={false}>
+                {"Don't want to sign in? "}
+                <Text
+                  style={styles.loginGoldText}
+                  onPress={() => router.replace('/screens/HomeScreen')}
+                >
+                  Continue as Guest
+                </Text>
+              </Text>
+            </View>
+          </View>
         </View>
       </View>
     </SafeAreaView>
@@ -158,31 +156,27 @@ const styles = StyleSheet.create({
   // ── Brand ────────────────────────────────────────────────────────────────────
   brand: {
     position: 'absolute',
-    top: 130,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-  },
-  tbmLogo: {
-    width: 60,
-    height: 60,
-    marginBottom: 10,
+    top: Platform.OS === 'ios' ? 70 : 50,
+    left: 27,
+    right: 27,
+    alignItems: 'flex-start',
   },
   brandName: {
     color: '#C9922A',
-    fontFamily: 'Manrope_500Medium',
-    fontSize: 20,
-    letterSpacing: 4,
-    lineHeight: 26,
+    fontFamily: 'Manrope_700Bold',
+    fontSize: 26,
+    letterSpacing: 5,
+    lineHeight: 32,
+    fontWeight: '700',
   },
   brandTagline: {
     color: '#FFFFFF',
     fontFamily: 'Manrope_600SemiBold',
-    fontSize: 10,
-    letterSpacing: 1.5,
+    fontSize: 9,
+    letterSpacing: 1.2,
     lineHeight: 14,
-    marginTop: 2,
-    opacity: 0.85,
+    marginTop: 4,
+    opacity: 0.75,
   },
 
   // ── Bottom content ───────────────────────────────────────────────────────────
@@ -190,19 +184,28 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    bottom: 50,
+    top: Platform.OS === 'ios' ? 175 : 145,
+    bottom: Platform.OS === 'ios' ? 90 : 75,
     paddingHorizontal: 27,
-    // paddingBottom: 40,
+    justifyContent: 'space-between',
+  },
+  textContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    marginBottom: Platform.OS === 'ios' ? 40 : 20,
+  },
+  actionContainer: {
+    width: '100%',
   },
 
   // Headline
   headline: {
     color: '#FFFFFF',
     fontFamily: 'Manrope_700Bold',
-    fontSize: 33,
+    fontSize: 52,
     fontWeight: '700',
-    lineHeight: 36,
-    marginBottom: 17,
+    lineHeight: 58,
+    marginBottom: 16,
   },
   headlineGold: {
     color: '#C9922A',
@@ -210,21 +213,18 @@ const styles = StyleSheet.create({
 
   // Description
   description: {
-    color: 'rgba(255,255,255,0.70)',
+    color: 'rgba(255,255,255,0.75)',
     fontFamily: 'Manrope_500Medium',
-    fontSize: 12,
-    lineHeight: 18,
-    marginBottom: 38,
-    // marginTop:5,
-    width: '85%',
+    fontSize: 17,
+    lineHeight: 26,
   },
 
   // Buttons
   buttons: {
-    gap: 22,
+    gap: 15,
     marginBottom: 20,
   },
-  loginButton: {
+  getStartedButton: {
     width: '100%',
     height: 52,
     borderRadius: 8,
@@ -232,63 +232,46 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  loginButtonText: {
-    color: '#FFFFFF',
+  getStartedText: {
+    color: '#000000',
     fontFamily: 'Manrope_700Bold',
     fontSize: 15,
     fontWeight: '700',
   },
-  createButton: {
+  consultationButton: {
     width: '100%',
     height: 52,
     borderRadius: 8,
     borderWidth: 1.5,
     borderColor: '#C9922A',
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: 'rgba(0,0,0,0.3)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom:0,
   },
-  createButtonText: {
+  consultationText: {
     color: '#FFFFFF',
     fontFamily: 'Manrope_700Bold',
     fontSize: 15,
     fontWeight: '700',
   },
-  guestButton: {
-    height: 36,
+
+  // Login Area
+  loginContainer: {
     alignItems: 'center',
-    justifyContent: 'center', 
-    marginTop:40,
+    marginTop: 10,
   },
-  guestText: {
-    color: 'rgba(255,255,255,0.75)',
+  loginText: {
+    color: 'rgba(255,255,255,0.6)',
     fontFamily: 'Manrope_500Medium',
-    fontSize: 13,
+    fontSize: 14,
   },
-
-  // Divider
-  rule: {
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    marginBottom: 16,
-  },
-
-  // Footer
-  footer: {
-    color: 'rgba(255,255,255,0.55)',
-    fontFamily: 'Manrope_500Medium',
-    fontSize: 11,
-    lineHeight: 17,
-    textAlign: 'center',
-  },
-  footerLink: {
+  loginGoldText: {
     color: '#C9922A',
     fontFamily: 'Manrope_700Bold',
   },
 
   pressed: {
-    opacity: 0.82,
+    opacity: 0.85,
     transform: [{ scale: 0.98 }],
   },
 });

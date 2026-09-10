@@ -113,7 +113,7 @@ export default function SignupScreen() {
 
         {/* ── Full-screen background ── */}
         <Image
-          source={require('@/assets/images/welcomebg.png')}
+          source={require('@/assets/images/modern_interior_dark.png')}
           style={styles.bgImage}
           contentFit="cover"
         />
@@ -121,12 +121,12 @@ export default function SignupScreen() {
         {/* ── Gradient overlay ── */}
         <LinearGradient
           colors={[
-            'rgba(0,0,0,0.10)',
-            'rgba(0,0,0,0.55)',
-            'rgba(0,0,0,0.88)',
+            'rgba(0,0,0,0.65)',
+            'rgba(0,0,0,0.3)',
+            'rgba(0,0,0,0.75)',
             '#000000',
           ]}
-          locations={[0, 0.3, 0.6, 1]}
+          locations={[0, 0.35, 0.7, 1]}
           style={styles.gradient}
         />
 
@@ -141,18 +141,13 @@ export default function SignupScreen() {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            {/* ── Brand — center inside scroll ── */}
+            {/* ── Brand ── */}
             <View style={styles.brand}>
-              <Image
-                source={require('@/assets/images/logo.png')}
-                style={styles.tbmLogo}
-                contentFit="contain"
-              />
               <Text style={styles.brandName} allowFontScaling={false}>
-                Z I O R A ( B O G A T )
+                Z I O R A
               </Text>
               <Text style={styles.brandTagline} allowFontScaling={false}>
-                AI VISUALIZER &amp; ESTIMATES
+                POWERED BY TBM BUILDING SERVICES
               </Text>
             </View>
 
@@ -327,30 +322,27 @@ const styles = StyleSheet.create({
 
   // ── Brand ────────────────────────────────────────────────────────────────────
   brand: {
-    alignItems: 'center',
-    marginTop: 70,
+    alignItems: 'flex-start',
+    marginTop: Platform.OS === 'ios' ? 50 : 30,
     marginBottom: 20,
-  },
-  tbmLogo: {
-    width: 60,
-    height: 60,
-    marginBottom: 10,
+    paddingHorizontal: 27,
   },
   brandName: {
     color: GOLD,
-    fontFamily: 'Manrope_500Medium',
-    fontSize: 20,
-    letterSpacing: 4,
-    lineHeight: 26,
+    fontFamily: 'Manrope_700Bold',
+    fontSize: 30,
+    letterSpacing: 5,
+    lineHeight: 36,
+    fontWeight: '700',
   },
   brandTagline: {
     color: '#FFFFFF',
     fontFamily: 'Manrope_600SemiBold',
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 1.5,
-    lineHeight: 14,
-    marginTop: 2,
-    opacity: 0.85,
+    lineHeight: 16,
+    marginTop: 4,
+    opacity: 0.75,
   },
 
   // ── Keyboard / scroll ────────────────────────────────────────────────────────

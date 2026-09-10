@@ -15,8 +15,10 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { ApiService } from '@/app/services/apiService';
+import { TokenService } from '@/app/services/tokenService';
+import FeedbackModal from '@/components/FeedbackModal';
 import { useFavorites } from '@/components/home/FavoritesContext';
-import { HomeProduct, footerNavItems } from '@/app/data/home';
+import { HomeProduct, footerNavItems, mapApiProduct } from '@/app/data/home';
 import { ProductCard } from '@/components/home/ProductCard';
 import { HOME_HORIZONTAL_PADDING } from '@/components/home/layout';
 import { HomeFooter } from '@/components/home/HomeFooter';
@@ -29,48 +31,28 @@ export default function AllProductsScreen() {
   const router = useRouter();
   const { width: windowWidth } = useWindowDimensions();
   const { isFavorite, toggleFavorite } = useFavorites();
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
-  const [products, setProducts] = useState<HomeProduct[]>([]);
+  const [allProductsPool, setAllProductsPool] = useState<HomeProduct[]>([]);
+  const [displayLimit, setDisplayLimit] = useState(30);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchText, setSearchText] = useState('');
 
-  // Pagination states
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-
   const footerItems = useMemo(() => footerNavItems, []);
 
-  const mapApiProduct = (item: any): HomeProduct => {
-    return {
-      id: item.id,
-      name: item.name,
-      price: item.priceDisplay || (item.price != null ? `₦${Number(item.price).toLocaleString()}` : 'Request Price'),
-      image: { uri: item.primaryImageUrl || 'https://via.placeholder.com/300/252523/ffffff?text=No+Image' },
-      description: item.description || item.shortDescription || 'No description available.',
-      review: 'Highly recommended by verified buyers for build quality.',
-      availability: item.inStock ? 'In stock - Limited units available' : 'Out of stock',
-      delivery: '15 days after payment confirmation',
-      colors: item.color ? [item.color] : ['#C9922A', '#E8E8E8', '#1A1A1A'],
-    };
-  };
-
-  const fetchProducts = async (pageToLoad: number, append: boolean = false) => {
+  const fetchProducts = async () => {
     try {
-      if (pageToLoad === 1 && !refreshing) setLoading(true);
+      if (!refreshing) setLoading(true);
       
-      const res = await ApiService.getAllProducts(pageToLoad, 12);
+      const res = await ApiService.getAllProducts(1, 250);
       
       let rawItems: any[] = [];
-      let totalPages = 1;
       
       if (res && res.success && res.data) {
         rawItems = res.data.items || [];
-        totalPages = res.data.totalPages || 1;
       } else if (res && res.data) {
         rawItems = res.data.items || res.data || [];
-        totalPages = res.data.totalPages || 1;
       }
 
       const mapped = rawItems.map(mapApiProduct);
@@ -78,48 +60,59 @@ export default function AllProductsScreen() {
       // Cache products for ProductDetail lookup
       ApiService.cacheProducts(mapped);
 
-      if (append) {
-        setProducts(prev => [...prev, ...mapped]);
-      } else {
-        setProducts(mapped);
-      }
+      // Globally separate products with valid HTTP image URLs from those without
+      const withImages = mapped.filter(p => {
+        const img = p.image;
+        const uri = typeof img === 'object' && img !== null && 'uri' in img ? img.uri : '';
+        return typeof uri === 'string' && uri.trim().startsWith('http');
+      });
 
-      setHasMore(pageToLoad < totalPages);
+      const withoutImages = mapped.filter(p => {
+        const img = p.image;
+        const uri = typeof img === 'object' && img !== null && 'uri' in img ? img.uri : '';
+        return !(typeof uri === 'string' && uri.trim().startsWith('http'));
+      });
+
+      // Merge globally: products with images always come first
+      const finalPool = [...withImages, ...withoutImages];
+      setAllProductsPool(finalPool);
+      setDisplayLimit(30);
     } catch (err) {
       console.error('Failed to load products list:', err);
     } finally {
       setLoading(false);
       setRefreshing(false);
-      setLoadingMore(false);
     }
   };
 
   useEffect(() => {
-    fetchProducts(1, false);
+    fetchProducts();
   }, []);
 
   const handleRefresh = () => {
     setRefreshing(true);
-    setPage(1);
-    fetchProducts(1, false);
+    fetchProducts();
   };
 
-  const handleLoadMore = () => {
-    if (hasMore && !loadingMore && !loading) {
-      setLoadingMore(true);
-      const nextPage = page + 1;
-      setPage(nextPage);
-      fetchProducts(nextPage, true);
-    }
-  };
-
-  const filteredProducts = useMemo(() => {
-    if (!searchText.trim()) return products;
+  const filteredPool = useMemo(() => {
+    if (!searchText.trim()) return allProductsPool;
     const query = searchText.toLowerCase();
-    return products.filter(
+    return allProductsPool.filter(
       p => p.name.toLowerCase().includes(query) || p.description.toLowerCase().includes(query)
     );
-  }, [products, searchText]);
+  }, [allProductsPool, searchText]);
+
+  const filteredProducts = useMemo(() => {
+    return filteredPool.slice(0, displayLimit);
+  }, [filteredPool, displayLimit]);
+
+  const hasMore = useMemo(() => {
+    return displayLimit < filteredPool.length;
+  }, [filteredPool, displayLimit]);
+
+  const handleLoadMore = () => {
+    setDisplayLimit(prev => prev + 30);
+  };
 
   const handleProductPress = (product: HomeProduct) => {
     router.push({
@@ -128,11 +121,39 @@ export default function AllProductsScreen() {
     });
   };
 
-  const handleFooterSelect = (itemId: string) => {
-    if (itemId === 'home') router.push('/screens/HomeScreen');
-    if (itemId === 'cart') router.push('/screens/CartScreen');
-    if (itemId === 'favorite') router.push('/screens/FavoriteScreen');
-    if (itemId === 'profile') router.push('/screens/ProfileScreen');
+  const handleFooterSelect = async (itemId: string) => {
+    if (itemId === 'home') {
+      router.push('/screens/HomeScreen');
+      return;
+    }
+
+    const token = await TokenService.getAccessToken();
+    if (!token) {
+      setShowAuthModal(true);
+      return;
+    }
+
+    if (itemId === 'favorite') {
+      router.push('/screens/FavoriteScreen');
+    }
+    if (itemId === 'projects') {
+      router.push('/screens/MyProjectsScreen');
+    }
+    if (itemId === 'cart') {
+      router.push('/screens/CartScreen');
+    }
+    if (itemId === 'profile') {
+      router.push('/screens/ProfileScreen');
+    }
+  };
+
+  const handleFavoritePress = async (productId: string) => {
+    const token = await TokenService.getAccessToken();
+    if (!token) {
+      setShowAuthModal(true);
+      return;
+    }
+    toggleFavorite(productId);
   };
 
   // 2-column layout width calculation
@@ -207,7 +228,7 @@ export default function AllProductsScreen() {
                       width={cardWidth}
                       isFavorite={isFavorite(product.id)}
                       onPress={handleProductPress}
-                      onFavoritePress={() => toggleFavorite(product.id)}
+                      onFavoritePress={() => handleFavoritePress(product.id)}
                     />
                   ))}
                 </View>
@@ -216,15 +237,10 @@ export default function AllProductsScreen() {
                   <Pressable
                     style={({ pressed }) => [styles.loadMoreButton, pressed && styles.loadMorePressed]}
                     onPress={handleLoadMore}
-                    disabled={loadingMore}
                   >
-                    {loadingMore ? (
-                      <ActivityIndicator size="small" color="#C9922A" />
-                    ) : (
-                      <Text style={styles.loadMoreText} allowFontScaling={false}>
-                        Load More Products
-                      </Text>
-                    )}
+                    <Text style={styles.loadMoreText} allowFontScaling={false}>
+                      Load More Products
+                    </Text>
                   </Pressable>
                 )}
               </>
@@ -234,8 +250,22 @@ export default function AllProductsScreen() {
 
         <HomeFooter
           items={footerItems}
-          activeItemId="home"
+          activeItemId=""
           onSelectItem={handleFooterSelect}
+        />
+
+        <FeedbackModal
+          visible={showAuthModal}
+          type="info"
+          title="Authentication Required"
+          message="Please log in or create an account to manage your cart, save favorites, or view your dashboard."
+          buttonText="Log In"
+          secondaryButtonText="Cancel"
+          onClose={() => setShowAuthModal(false)}
+          onConfirm={() => {
+            setShowAuthModal(false);
+            router.push('/screens/LoginScreen');
+          }}
         />
       </View>
     </SafeAreaView>

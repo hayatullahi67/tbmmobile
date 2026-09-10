@@ -1,11 +1,9 @@
-import {
-  formatNaira
-} from '@/app/screens/ziora-ai/mockEstimateData';
+import { formatNaira } from '@/utils/formatters';
 import { ApiService } from '@/app/services/apiService';
 import { TokenService } from '@/app/services/tokenService';
 import FeedbackModal from '@/components/FeedbackModal';
 import { InspectionBookingModal } from '@/components/InspectionBookingModal';
-import { PaystackPaymentModal } from '@/components/PaystackPaymentModal';
+import { PaystackWebViewModal } from '@/components/PaystackWebViewModal';
 import { UpgradeFormModal } from '@/components/UpgradeFormModal';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -43,6 +41,7 @@ export default function EstimateDetailScreen() {
   const [showPaystack, setShowPaystack] = useState(false);
   const [showBooking, setShowBooking] = useState(false);
   const [paystackRef, setPaystackRef] = useState('');
+  const [paystackUrl, setPaystackUrl] = useState('');
   const [userProfile, setUserProfile] = useState<{ contactName: string; contactPhone: string; contactEmail: string } | null>(null);
 
   const showFeedback = (type: 'success' | 'error' | 'info', title: string, message: string) => {
@@ -82,7 +81,7 @@ export default function EstimateDetailScreen() {
   const handleUpgradeSubmit = async (data: { contactName: string; contactPhone: string; contactEmail: string; additionalNotes?: string }) => {
     if (!estimate) return;
     if (upgradeType === '3d') {
-      await ApiService.request3DDesign({
+      const res = await ApiService.request3DDesign({
         estimateId: estimate.id,
         projectDescription: `3D design for my ${estimate.roomType || 'room'}`,
         contactName: data.contactName,
@@ -90,33 +89,36 @@ export default function EstimateDetailScreen() {
         contactEmail: data.contactEmail,
         additionalNotes: data.additionalNotes || '',
       });
-      showFeedback('success', 'Request Received', 'Your 3D design request has been received!');
+      showFeedback('success', 'Request Received', res.message || 'Your 3D design request has been received!');
     } else if (upgradeType === 'boq') {
-      await ApiService.requestBOQ({
+      const res = await ApiService.requestBOQ({
         estimateId: estimate.id,
         contactName: data.contactName,
         contactPhone: data.contactPhone,
         contactEmail: data.contactEmail,
         additionalNotes: data.additionalNotes || '',
       });
-      showFeedback('success', 'Request Received', 'Your Official BOQ request has been received!');
+      showFeedback('success', 'Request Received', res.message || 'Your Official BOQ request has been received!');
     } else if (upgradeType === 'designer') {
-      await ApiService.requestDesignerContact({
+      const res = await ApiService.requestDesignerContact({
         estimateId: estimate.id,
         contactName: data.contactName,
         contactPhone: data.contactPhone,
         contactEmail: data.contactEmail,
         additionalNotes: data.additionalNotes || '',
       });
-      showFeedback('success', 'Request Received', 'Your request to speak with a designer has been received!');
+      showFeedback('success', 'Request Received', res.message || 'Your request to speak with a designer has been received!');
     }
   };
 
   const handlePaystackSuccess = async (reference: string) => {
     try {
       setShowPaystack(false);
+      console.log('[DEBUG] Paystack success. Verifying payment ref:', reference);
       // STEP B: Verify the payment
       const res = await ApiService.verifyInspectionPayment({ reference });
+      console.log('[DEBUG] Payment verification response in EstimateDetailScreen:', JSON.stringify(res, null, 2));
+      
       if (res && res.success) {
         setPaystackRef(reference);
         setShowBooking(true);
@@ -124,16 +126,165 @@ export default function EstimateDetailScreen() {
         showFeedback('error', 'Verification Failed', res.message || 'We could not verify your payment reference.');
       }
     } catch (e: any) {
+      console.log('[DEBUG] Payment verification caught exception:', e);
       showFeedback('error', 'Verification Error', e.message || 'An error occurred during payment verification.');
     }
   };
 
+  const formatToISODate = (dateStr: string): string | null => {
+    if (!dateStr) return null;
+    const clean = dateStr.trim();
+    
+    // Check if already YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
+      return clean;
+    }
+    
+    // DD/MM/YYYY or DD-MM-YYYY
+    const dmyMatch = clean.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+    if (dmyMatch) {
+      const [_, d, m, y] = dmyMatch;
+      return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    }
+    
+    // Fallback general parse
+    const parsed = Date.parse(clean);
+    if (!isNaN(parsed)) {
+      const date = new Date(parsed);
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+    
+    return null;
+  };
+
+  const combineDateTimeToISO = (dateStr: string, timeStr: string): string | null => {
+    try {
+      const isoDate = formatToISODate(dateStr);
+      if (!isoDate) return null;
+      
+      const match = timeStr.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+      let hours = 10;
+      let minutes = 0;
+      if (match) {
+        hours = parseInt(match[1], 10);
+        minutes = parseInt(match[2], 10);
+        const ampm = match[3].toUpperCase();
+        if (ampm === 'PM' && hours < 12) {
+          hours += 12;
+        } else if (ampm === 'AM' && hours === 12) {
+          hours = 0;
+        }
+      }
+      
+      const dateParts = isoDate.split('-');
+      if (dateParts.length === 3) {
+        const year = parseInt(dateParts[0], 10);
+        const month = parseInt(dateParts[1], 10) - 1; // 0-indexed
+        const day = parseInt(dateParts[2], 10);
+        const date = new Date(year, month, day, hours, minutes, 0, 0);
+        return date.toISOString();
+      }
+    } catch (e) {
+      console.error('Error combining date and time:', e);
+    }
+    return null;
+  };
+
   const handleInspectionBookingSubmit = async (data: any) => {
-    await ApiService.bookInspection({
-      ...data,
-      paymentReference: paystackRef,
+    const isoDateTime1 = combineDateTimeToISO(data.preferredDate1, data.preferredTime1);
+    if (!isoDateTime1) {
+      throw new Error('Preferred Date 1 and Time 1 are required.');
+    }
+
+    let isoDateTime2: string | undefined = undefined;
+    if (data.preferredDate2 && data.preferredTime2) {
+      isoDateTime2 = combineDateTimeToISO(data.preferredDate2, data.preferredTime2) || undefined;
+    }
+
+    console.log('[BOOKING FLOW] Step 1: Submitting booking details:', {
+      contactName: data.contactName,
+      contactPhone: data.contactPhone,
+      contactEmail: data.contactEmail,
+      siteAddress: data.siteAddress,
+      siteCity: data.siteCity,
+      siteState: data.siteState,
+      preferredDate1: isoDateTime1,
+      preferredDate2: isoDateTime2,
+      propertyType: data.propertyType,
+      consultationType: data.consultationType,
+      additionalNotes: data.additionalNotes || '',
     });
-    showFeedback('success', 'Booking Confirmed', 'Your site inspection booking has been received!');
+
+    // 1. Submit the booking details
+    const bookRes: any = await ApiService.bookInspection({
+      contactName: data.contactName,
+      contactPhone: data.contactPhone,
+      contactEmail: data.contactEmail,
+      siteAddress: data.siteAddress,
+      siteCity: data.siteCity,
+      siteState: data.siteState,
+      preferredDate1: isoDateTime1,
+      preferredDate2: isoDateTime2 || '',
+      propertyType: data.propertyType,
+      consultationType: data.consultationType,
+      paymentReference: '',
+      additionalNotes: data.additionalNotes || '',
+    });
+
+    console.log('[BOOKING FLOW] Step 1 Response from server:', JSON.stringify(bookRes, null, 2));
+
+    const inspectionId = bookRes?.bookingId || bookRes?.id || bookRes?.inspectionId || bookRes?.data?.id || bookRes?.data?.bookingId || bookRes?.data?.inspectionId;
+    console.log('[BOOKING FLOW] Extracted inspectionId:', inspectionId);
+
+    if (!bookRes || !bookRes.success || !inspectionId) {
+      throw new Error(bookRes?.message || 'Failed to submit inspection details.');
+    }
+
+    // 2. Initialize Paystack payment
+    console.log('[BOOKING FLOW] Step 2: Initializing payment on server for ID:', inspectionId, 'Email:', data.contactEmail);
+    const payRes: any = await ApiService.initializeInspectionPayment(inspectionId, data.contactEmail);
+    console.log('[BOOKING FLOW] Step 2 Response from server:', JSON.stringify(payRes, null, 2));
+
+    const authUrl = payRes?.authorizationUrl || payRes?.data?.authorizationUrl;
+    const reference = payRes?.reference || payRes?.data?.reference;
+    console.log('[BOOKING FLOW] Extracted authUrl & reference:', { authUrl, reference });
+
+    if (!payRes || payRes.success === false || !authUrl) {
+      throw new Error(payRes?.message || 'Failed to initialize payment.');
+    }
+
+    // 3. Save URL & Reference, then show Webview Modal
+    setPaystackUrl(authUrl);
+    setPaystackRef(reference);
+    setShowPaystack(true);
+  };
+
+  const handlePaystackWebViewClose = async () => {
+    setShowPaystack(false);
+    if (!paystackRef) return;
+    
+    try {
+      console.log('[BOOKING FLOW] Step 4: Verifying payment for reference:', paystackRef);
+      showFeedback('info', 'Verifying Payment', 'Verifying payment status, please wait...');
+      const verifyRes = await ApiService.verifyInspectionPayment({ reference: paystackRef });
+      console.log('[BOOKING FLOW] Step 4 Response from server:', JSON.stringify(verifyRes, null, 2));
+      
+      if (verifyRes.success) {
+        showFeedback('success', 'Booking Confirmed', verifyRes.message || 'Your site inspection has been successfully booked and payment verified!');
+      } else {
+        showFeedback(
+          'error',
+          'Payment Verification Failed',
+          verifyRes.message || 'We could not verify your payment. Reference: ' + paystackRef
+        );
+      }
+    } catch (e: any) {
+      console.error('[BOOKING FLOW] Error in verification:', e);
+      showFeedback('error', 'Error', e.message || 'An error occurred during verification.');
+    }
   };
 
   useEffect(() => {
@@ -147,19 +298,55 @@ export default function EstimateDetailScreen() {
       try {
         const res = await ApiService.getRenovationEstimateDetails(params.estimateId);
         const raw = (res as any)?.data || res;
+        console.log('[API DEBUG] raw estimate response details:', JSON.stringify(raw, null, 2));
+
         if (raw && (raw.estimateId || raw.projectName || raw.id) && active) {
+          // 1. Quality Tier Specific Parsing (Does not use finishLevel / complexity as a quality fallback)
+          const rawTier = raw.qualityTierName ?? raw.qualityTier ?? raw.quality ?? raw.tier;
+          let qualityTierLabel = 'Standard';
+
+          if (rawTier !== undefined && rawTier !== null) {
+            const cleanTier = String(rawTier).trim();
+            const lowerTier = cleanTier.toLowerCase();
+            if (cleanTier === '0' || lowerTier === 'budget') {
+              qualityTierLabel = 'Budget';
+            } else if (cleanTier === '1' || lowerTier === 'standard') {
+              qualityTierLabel = 'Standard';
+            } else if (cleanTier === '2' || lowerTier === 'premium') {
+              qualityTierLabel = 'Premium';
+            } else if (cleanTier === '3' || lowerTier === 'luxury') {
+              qualityTierLabel = 'Luxury';
+            } else {
+              const parsedInt = parseInt(cleanTier, 10);
+              if (!isNaN(parsedInt) && parsedInt >= 0 && parsedInt <= 3) {
+                const tierNames = ['Budget', 'Standard', 'Premium', 'Luxury'];
+                qualityTierLabel = tierNames[parsedInt];
+              } else {
+                qualityTierLabel = cleanTier;
+              }
+            }
+          }
+
+          // 2. Complexity / Finish Level Specific Parsing
+          const rawComplexity = raw.complexity ?? raw.finishLevel;
+          let complexityLabel = 'Standard Renovation';
+          if (rawComplexity !== undefined && rawComplexity !== null) {
+            complexityLabel = String(rawComplexity).trim() || 'Standard Renovation';
+          }
+
           setEstimate({
             id: raw.estimateId || raw.id,
             projectName: raw.projectName || 'Renovation Project',
             roomType: raw.roomType || 'Living Room',
-            complexity: raw.finishLevel || raw.complexity || 'Standard Renovation',
+            qualityTier: qualityTierLabel,
+            complexity: complexityLabel,
             totalEstimate: raw.totalEstimate || 0,
             status: raw.status || 'Saved',
             paymentPlanOptions: raw.paymentPlanOptions || [],
-            floorAreaSqm: raw.floorAreaSqm || 0,
+            floorAreaSqm: raw.floorArea ?? raw.floorAreaSqm ?? 0,
             wallAreaSqm: raw.wallAreaSqm || 0,
             materialsSubtotal: raw.materialsSubtotal || 0,
-            laborSubtotal: raw.laborSubtotal || 0,
+            laborSubtotal: raw.labourSubtotal ?? raw.laborSubtotal ?? 0,
             contingencyAmount: raw.contingencyAmount || 0,
             lineItems: raw.lineItems || [],
             suggestedProducts: raw.suggestedProducts || [],
@@ -179,9 +366,6 @@ export default function EstimateDetailScreen() {
     };
   }, [params.estimateId]);
 
-  const comparisonCards = useMemo(() => {
-    return [];
-  }, []);
 
   const openQuotation = () => {
     if (!estimate) return;
@@ -235,7 +419,7 @@ export default function EstimateDetailScreen() {
             </View>
             <Text style={styles.projectName} allowFontScaling={false}>{estimate.projectName}</Text>
             <Text style={styles.metaText} allowFontScaling={false}>
-              {estimate.roomType} • {estimate.complexity}
+              {estimate.roomType}
             </Text>
 
             {/* Pricing Box */}
@@ -253,26 +437,21 @@ export default function EstimateDetailScreen() {
                 <Text style={styles.infoCellLabel} allowFontScaling={false}>FLOOR AREA</Text>
                 <Text style={styles.infoCellValue} allowFontScaling={false}>{estimate.floorAreaSqm.toFixed(1)} sqm</Text>
               </View>
+              {/* Commented out Quality Tier Cell
               <View style={styles.infoCell}>
-                <Text style={styles.infoCellLabel} allowFontScaling={false}>WALL AREA</Text>
-                <Text style={styles.infoCellValue} allowFontScaling={false}>{estimate.wallAreaSqm.toFixed(1)} sqm</Text>
+                <Text style={styles.infoCellLabel} allowFontScaling={false}>QUALITY TIER</Text>
+                <Text style={[styles.infoCellValue, { color: '#C9922A' }]} allowFontScaling={false}>{estimate.qualityTier}</Text>
               </View>
+              */}
+              {estimate.wallAreaSqm > 0 && (
+                <View style={styles.infoCell}>
+                  <Text style={styles.infoCellLabel} allowFontScaling={false}>WALL AREA</Text>
+                  <Text style={styles.infoCellValue} allowFontScaling={false}>{estimate.wallAreaSqm.toFixed(1)} sqm</Text>
+                </View>
+              )}
             </View>
           </View>
 
-          {/* Commented out confidence explanation banner
-          <View style={styles.explanationBanner}>
-            <Ionicons name="sparkles-outline" size={18} color="#C9922A" />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.explanationTitle} allowFontScaling={false}>
-                Ziora Confidence Score
-              </Text>
-              <Text style={styles.explanationBody} allowFontScaling={false}>
-                Based on completed room dimensions, selected material qualities per category, and scope options. Site inspection will raise accuracy to 100%.
-              </Text>
-            </View>
-          </View>
-          */}
 
           {/* AI Estimate Summary Banner */}
           {estimate.summary && (
@@ -320,26 +499,6 @@ export default function EstimateDetailScreen() {
             </View>
           </View>
 
-          {/* Commented out suggested milestone payment schedule
-          <SectionTitle title="Suggested Milestone Schedule" />
-          <View style={styles.milestoneBox}>
-            {estimate.paymentSchedule.map((line: any, idx: number) => (
-              <View key={line.label} style={styles.milestoneRow}>
-                <View style={styles.milestoneIndicatorCol}>
-                  <View style={styles.milestoneNodeActive}>
-                    <Text style={styles.milestoneNodeText} allowFontScaling={false}>{idx + 1}</Text>
-                  </View>
-                  {idx < estimate.paymentSchedule.length - 1 && <View style={styles.milestoneLine} />}
-                </View>
-                <View style={styles.milestoneTextCol}>
-                  <Text style={styles.milestoneTitle} allowFontScaling={false}>{line.label}</Text>
-                  <Text style={styles.milestoneDesc} allowFontScaling={false}>{line.note}</Text>
-                  <Text style={styles.milestoneAmount} allowFontScaling={false}>{formatNaira(line.amount)}</Text>
-                </View>
-              </View>
-            ))}
-          </View>
-          */}
 
           {/* Flexible Payment Plans */}
           {estimate.paymentPlanOptions && estimate.paymentPlanOptions.length > 0 && (
@@ -384,13 +543,27 @@ export default function EstimateDetailScreen() {
             <>
               <SectionTitle title="Recommended Materials" />
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.compareScroll}>
-                {estimate.suggestedProducts.map((prod: any) => (
-                  <View key={prod.productId} style={styles.compareCard}>
-                    <Text style={styles.compareLabel} allowFontScaling={false}>{prod.category}</Text>
-                    <Text style={[styles.compareValue, { fontSize: 13, minHeight: 36 }]} allowFontScaling={false}>{prod.name}</Text>
-                    <Text style={[styles.compareDesc, { color: '#C9922A', fontWeight: '800' }]} allowFontScaling={false}>{formatNaira(prod.price)}</Text>
-                  </View>
-                ))}
+                {estimate.suggestedProducts.map((prod: any, idx: number) => {
+                  const prodId = prod.productId || prod.id;
+                  return (
+                    <Pressable
+                      key={prodId || idx}
+                      style={({ pressed }) => [styles.compareCard, pressed && styles.pressed]}
+                      onPress={() => {
+                        if (prodId) {
+                          router.push({
+                            pathname: '/screens/ProductDetailsScreen',
+                            params: { id: String(prodId) },
+                          });
+                        }
+                      }}
+                    >
+                      <Text style={styles.compareLabel} allowFontScaling={false}>{prod.category || 'Product'}</Text>
+                      <Text style={[styles.compareValue, { fontSize: 13, minHeight: 36 }]} allowFontScaling={false}>{prod.name}</Text>
+                      <Text style={[styles.compareDesc, { color: '#C9922A', fontWeight: '800' }]} allowFontScaling={false}>{formatNaira(prod.price)}</Text>
+                    </Pressable>
+                  );
+                })}
               </ScrollView>
             </>
           )}
@@ -414,35 +587,6 @@ export default function EstimateDetailScreen() {
             </>
           )}
 
-          {/* Commented out non-API design recommendations and comparisons
-          <SectionTitle title="AI Design Recommendations" />
-          <View style={styles.recommendationsList}>
-            {estimate.recommendations.map((rec: string) => (
-              <View key={rec} style={styles.recommendationItem}>
-                <View style={styles.recBulletCircle}>
-                  <Ionicons name="checkmark" size={12} color="#000000" />
-                </View>
-                <Text style={styles.recommendationText} allowFontScaling={false}>
-                  {rec}
-                </Text>
-              </View>
-            ))}
-          </View>
-
-          <SectionTitle title="Compare Material Scenarios" />
-          <Text style={styles.compareHint} allowFontScaling={false}>
-            See standard finish tier alternatives for this room size:
-          </Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.compareScroll}>
-            {comparisonCards.map((item) => (
-              <View key={item.label} style={styles.compareCard}>
-                <Text style={styles.compareLabel} allowFontScaling={false}>{item.label}</Text>
-                <Text style={styles.compareValue} allowFontScaling={false}>{formatNaira(item.value)}</Text>
-                <Text style={styles.compareDesc} allowFontScaling={false}>{item.note}</Text>
-              </View>
-            ))}
-          </ScrollView>
-          */}
 
           {/* Instant Upgrades Block */}
           <SectionTitle title="Instant Upgrades" />
@@ -460,7 +604,7 @@ export default function EstimateDetailScreen() {
                   if (up.label === 'Add 3D Design') {
                     setUpgradeType('3d');
                   } else if (up.label === 'Book Site Inspection') {
-                    setShowPaystack(true);
+                    setShowBooking(true);
                   } else if (up.label === 'Request Official BOQ') {
                     setUpgradeType('boq');
                   } else if (up.label === 'Speak with Designer') {
@@ -514,11 +658,11 @@ export default function EstimateDetailScreen() {
         defaultValues={userProfile}
       />
 
-      <PaystackPaymentModal
+      <PaystackWebViewModal
         visible={showPaystack}
-        onClose={() => setShowPaystack(false)}
-        amount={10000}
-        onSuccess={handlePaystackSuccess}
+        onClose={handlePaystackWebViewClose}
+        authorizationUrl={paystackUrl}
+        reference={paystackRef}
       />
 
       <InspectionBookingModal

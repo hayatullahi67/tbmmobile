@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ApiService } from '@/app/services/apiService';
+import { WebView } from 'react-native-webview';
 import {
   ActivityIndicator,
   Dimensions,
@@ -118,6 +119,45 @@ export default function VisualizerResultScreen() {
   useEffect(() => {
     let active = true;
 
+    async function pollProjectStatus(projId: string, maxAttempts = 30, delayMs = 6000): Promise<string> {
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          console.log(`[API Poll] Checking project ${projId} status, attempt ${attempt}/${maxAttempts}...`);
+          const projectsRes = await ApiService.getAiProjects();
+          if (projectsRes.success && projectsRes.data) {
+            const myProject = projectsRes.data.find((p: any) => (p.id === projId || p.projectId === projId));
+            if (myProject) {
+              console.log(`[API Poll] Project status is ${myProject.status}`);
+              if (myProject.status === 3) { // 3 = Completed
+                const outUrl = myProject.latestDesignUrl || myProject.outputUrl;
+                if (outUrl) {
+                  const matched = myProject.matchedProducts || [];
+                  if (matched.length > 0) {
+                    const mappedProducts = matched.map((p: any) => ({
+                      productId: p.productId || p.id || String(Math.random()),
+                      name: p.name || 'Bogat Material',
+                      category: p.role || p.category || 'Renovation Finish',
+                      price: p.price || 0,
+                      priceDisplay: p.priceDisplay || (p.price ? `₦${p.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '₦0.00'),
+                      imageUrl: p.imageUrl || p.image || 'https://images.unsplash.com/photo-1618220179428-22790b461013?w=150',
+                    }));
+                    setCurrentMatchedProducts(mappedProducts);
+                  }
+                  return outUrl;
+                }
+              } else if (myProject.status === 4) { // 4 = Failed
+                throw new Error('Project generation failed on backend.');
+              }
+            }
+          }
+        } catch (pollErr) {
+          console.warn(`[API Poll] Attempt ${attempt} failed:`, pollErr);
+        }
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+      throw new Error('Project status polling timed out.');
+    }
+
     async function executeRealApiGeneration() {
       if (isFetchingRef.current) return;
       isFetchingRef.current = true;
@@ -130,13 +170,14 @@ export default function VisualizerResultScreen() {
 
       let currentRemoteUrl = inputUrl;
       let currentProjectId = projectId;
+      const contextTags = ['Renovation Finish', 'Interior design', 'Bogat Inventory'];
 
       try {
-        // 1. Upload local reference image if needed
+        // 1. Upload local reference image if needed (using uploadRoomImage)
         if (inputUrl && (inputUrl.startsWith('file://') || inputUrl.startsWith('/') || inputUrl.startsWith('content://'))) {
           setLoaderMessage('Ziora is uploading reference image...');
-          const uploadRes = await ApiService.uploadDocument(inputUrl);
-          const uploadedUrl = (uploadRes as any)?.url || (uploadRes as any)?.data?.url;
+          const uploadRes: any = await ApiService.uploadRoomImage(inputUrl);
+          const uploadedUrl = uploadRes?.imageUrl || uploadRes?.data?.imageUrl || uploadRes?.url || uploadRes?.data?.url;
           if (uploadedUrl) {
             currentRemoteUrl = uploadedUrl;
             if (active) setRemoteImageUrl(uploadedUrl);
@@ -147,44 +188,53 @@ export default function VisualizerResultScreen() {
 
         // 2. Create AI project
         setLoaderMessage('Ziora is creating AI project...');
+        const payloadOutputType = isVideo ? 2 : 1;
+        const payloadGenerationType = isVideo ? 2 : 1;
+        console.log(`[DEBUG] createAIProject Input Params - outputType: ${payloadOutputType}, generationType: ${payloadGenerationType}, prompt: ${prompt}`);
+
         const projectRes = await ApiService.createAIProject({
           sourceImageUrl: currentRemoteUrl || null,
-          outputType: isVideo ? 2 : 1,
-          generationType: 1,
+          outputType: payloadOutputType,
+          generationType: payloadGenerationType,
           prompt: prompt,
           contextLabel: 'Renovation Visualizer'
         });
 
-        if (projectRes.success && projectRes.data) {
-          const resProjId = projectRes.data.id || projectRes.data.projectId;
-          if (resProjId) {
-            currentProjectId = resProjId;
-            if (active) setActiveProjectId(resProjId);
-          }
+        console.log('[DEBUG] createAIProject Response payload:', JSON.stringify(projectRes));
+
+        const resProjId = (projectRes as any)?.id || (projectRes as any)?.projectId || projectRes?.data?.id || projectRes?.data?.projectId;
+        console.log('[DEBUG] Extracted resProjId:', resProjId);
+        if (resProjId) {
+          currentProjectId = resProjId;
+          if (active) setActiveProjectId(resProjId);
         }
 
         // 3. Trigger generation
+        let genRes: any = null;
         if (isVideo) {
           setLoaderMessage('Ziora is generating your video concept...');
-          const genRes = await ApiService.generateAIVideo({
+          genRes = await ApiService.generateAIVideo({
             projectId: currentProjectId,
             prompt: prompt,
             sourceImageUrl: currentRemoteUrl || null,
-            durationSeconds: 5
+            durationSeconds: 5,
+            style: routeStyleId,
+            contextTags
           });
-          const outUrl = (genRes as any)?.data?.url || (genRes as any)?.url || (genRes as any)?.data?.videoUrl || (genRes as any)?.videoUrl || (genRes as any)?.data?.outputUrl || (genRes as any)?.outputUrl;
+          const outUrl = genRes?.data?.url || genRes?.url || genRes?.data?.videoUrl || genRes?.videoUrl || genRes?.data?.outputUrl || genRes?.outputUrl;
           if (outUrl && active) {
             setCurrentOutputUrl(outUrl);
           }
         } else {
           setLoaderMessage('Ziora is generating your image concept...');
-          const genRes = await ApiService.generateAIImage({
+          genRes = await ApiService.generateAIImage({
             projectId: currentProjectId,
             prompt: prompt,
             sourceImageUrl: currentRemoteUrl || null,
-            style: routeStyleId
+            style: routeStyleId,
+            contextTags
           });
-          const outUrl = (genRes as any)?.data?.url || (genRes as any)?.url || (genRes as any)?.data?.imageUrl || (genRes as any)?.imageUrl || (genRes as any)?.data?.outputUrl || (genRes as any)?.outputUrl;
+          const outUrl = genRes?.data?.url || genRes?.url || genRes?.data?.imageUrl || genRes?.imageUrl || genRes?.data?.outputUrl || genRes?.outputUrl;
           if (outUrl && active) {
             setLoaderMessage('Ziora is caching design layout...');
             try {
@@ -196,23 +246,56 @@ export default function VisualizerResultScreen() {
           }
         }
 
-        // 4. Load matched products from real database API
-        const prodRes = await ApiService.getAllProducts(1, 10);
-        if (prodRes.success && prodRes.data && active) {
-          const products = prodRes.data.products || prodRes.data.items || prodRes.data || [];
-          const mappedProducts = products.map((p: any) => ({
-            productId: p.id || p.productId || String(Math.random()),
-            name: p.name || p.title,
-            category: p.categoryName || p.category || 'Renovation Finish',
-            price: p.price || 0,
-            priceDisplay: p.price ? `₦${p.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '₦0.00',
-            imageUrl: p.imageUrl || p.image || 'https://images.unsplash.com/photo-1618220179428-22790b461013?w=150',
-          }));
-          setCurrentMatchedProducts(mappedProducts);
+        // 4. Map matched products directly from the design generation response
+        const matched = genRes?.data?.matchedProducts || genRes?.matchedProducts || [];
+        if (active) {
+          if (matched && matched.length > 0) {
+            const mappedProducts = matched.map((p: any) => ({
+              productId: p.productId || p.id || String(Math.random()),
+              name: p.name || 'Bogat Material',
+              category: p.role || p.category || 'Renovation Finish',
+              price: p.price || 0,
+              priceDisplay: p.priceDisplay || (p.price ? `₦${p.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '₦0.00'),
+              imageUrl: p.imageUrl || p.image || 'https://images.unsplash.com/photo-1618220179428-22790b461013?w=150',
+            }));
+            setCurrentMatchedProducts(mappedProducts);
+          } else {
+            // Fallback to fetch from all products if matchedProducts is empty
+            try {
+              const prodRes = await ApiService.getAllProducts(1, 10);
+              if (prodRes.success && prodRes.data) {
+                const products = prodRes.data.products || prodRes.data.items || prodRes.data || [];
+                const mappedProducts = products.map((p: any) => ({
+                  productId: p.id || p.productId || String(Math.random()),
+                  name: p.name || p.title,
+                  category: p.categoryName || p.category || 'Renovation Finish',
+                  price: p.price || 0,
+                  priceDisplay: p.price ? `₦${p.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '₦0.00',
+                  imageUrl: p.imageUrl || p.image || 'https://images.unsplash.com/photo-1618220179428-22790b461013?w=150',
+                }));
+                setCurrentMatchedProducts(mappedProducts);
+              }
+            } catch (prodErr) {
+              console.warn('[Products Fetch Fallback] failed:', prodErr);
+            }
+          }
         }
 
       } catch (err: any) {
-        console.error('[API] Ziora generation failed:', err);
+        console.error('[API] Ziora generation failed, attempting recovery polling:', err);
+        setLoaderMessage(isVideo 
+          ? 'Ziora is rendering your video concept (this may take 1-3 minutes)...' 
+          : 'Ziora is rendering your image concept...');
+        try {
+          const outUrl = await pollProjectStatus(currentProjectId, isVideo ? 60 : 30);
+          if (outUrl && active) {
+            setCurrentOutputUrl(outUrl);
+            return;
+          }
+        } catch (pollErr: any) {
+          console.error('[API Poll Recovery] Failed:', pollErr);
+        }
+
         if (active) {
           showFeedback('error', 'Generation Failed', err?.message || 'Ziora was unable to complete the generation. Please try again.');
         }
@@ -235,17 +318,19 @@ export default function VisualizerResultScreen() {
     if (isTransforming) return;
     setIsTransforming(true);
     setSelectedStyle(styleName);
+    const contextTags = ['Renovation Finish', 'Interior design', 'Bogat Inventory'];
 
     try {
       // 1. Call real AI generation API to transform style
-      const genRes = await ApiService.generateAIImage({
+      const genRes: any = await ApiService.generateAIImage({
         projectId: activeProjectId,
         prompt: prompt,
         sourceImageUrl: remoteImageUrl || null,
-        style: styleId
+        style: styleId,
+        contextTags
       });
 
-      const outUrl = (genRes as any)?.data?.url || (genRes as any)?.url || (genRes as any)?.data?.imageUrl || (genRes as any)?.imageUrl || (genRes as any)?.data?.outputUrl || (genRes as any)?.outputUrl;
+      const outUrl = genRes?.data?.url || genRes?.url || genRes?.data?.imageUrl || genRes?.imageUrl || genRes?.data?.outputUrl || genRes?.outputUrl;
       if (outUrl) {
         try {
           await Image.prefetch(outUrl);
@@ -253,6 +338,20 @@ export default function VisualizerResultScreen() {
           console.warn('[ImagePrefetch] failed:', err);
         }
         setCurrentOutputUrl(outUrl);
+      }
+
+      // Map new matched products as well!
+      const matched = genRes?.data?.matchedProducts || genRes?.matchedProducts || [];
+      if (matched && matched.length > 0) {
+        const mappedProducts = matched.map((p: any) => ({
+          productId: p.productId || p.id || String(Math.random()),
+          name: p.name || 'Bogat Material',
+          category: p.role || p.category || 'Renovation Finish',
+          price: p.price || 0,
+          priceDisplay: p.priceDisplay || (p.price ? `₦${p.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '₦0.00'),
+          imageUrl: p.imageUrl || p.image || 'https://images.unsplash.com/photo-1618220179428-22790b461013?w=150',
+        }));
+        setCurrentMatchedProducts(mappedProducts);
       }
 
     } catch (err: any) {
@@ -272,11 +371,49 @@ export default function VisualizerResultScreen() {
       {/* Visualizer Image Container */}
       <View style={styles.fullScreenContainer}>
         <View style={styles.imageCardContainer}>
-          <Image
-            source={currentImageSource}
-            style={styles.mainImageCard}
-            contentFit="cover"
-          />
+          {isVideo && currentOutputUrl ? (
+            <WebView
+              source={{
+                html: `
+                  <html>
+                    <head>
+                      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+                      <style>
+                        body {
+                          margin: 0;
+                          background-color: #000;
+                          display: flex;
+                          align-items: center;
+                          justify-content: center;
+                          height: 100vh;
+                          width: 100vw;
+                          overflow: hidden;
+                        }
+                        video {
+                          width: 100%;
+                          height: 100%;
+                          object-fit: contain;
+                        }
+                      </style>
+                    </head>
+                    <body>
+                      <video src="${currentOutputUrl}" controls playsinline preload="metadata" autoplay loop></video>
+                    </body>
+                  </html>
+                `
+              }}
+              style={styles.mainImageCard}
+              backgroundColor="#000000"
+              javaScriptEnabled={true}
+              domStorageEnabled={true}
+            />
+          ) : (
+            <Image
+              source={currentImageSource}
+              style={styles.mainImageCard}
+              contentFit="cover"
+            />
+          )}
           <LinearGradient
             colors={['rgba(0,0,0,0.3)', 'transparent', 'rgba(0,0,0,0.5)']}
             locations={[0, 0.4, 1]}

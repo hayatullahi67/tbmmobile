@@ -15,6 +15,8 @@ import {
 
 import { HomeProduct, latestReleaseProducts } from '@/app/data/home';
 import { ApiService } from '@/app/services/apiService';
+import { TokenService } from '@/app/services/tokenService';
+import FeedbackModal from '@/components/FeedbackModal';
 import { useCart } from '@/components/home/CartContext';
 import { useFavorites } from '@/components/home/FavoritesContext';
 import { HOME_HORIZONTAL_PADDING } from '@/components/home/layout';
@@ -31,6 +33,7 @@ export default function ProductDetailsScreen() {
   const [activeTab, setActiveTab] = useState<'description' | 'reviews'>('description');
   const [quantity, setQuantity] = useState(1);
   const [addingToCart, setAddingToCart] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   const product = useMemo<HomeProduct>(
     () => (ApiService.getProductFromCache(productId || '') as HomeProduct | null) ?? latestReleaseProducts.find(item => item.id === productId) ?? latestReleaseProducts[0],
@@ -39,6 +42,16 @@ export default function ProductDetailsScreen() {
 
   const isProductFavorite = isFavorite(product.id);
   const bodyText = activeTab === 'description' ? product.description : product.review;
+
+  const handleFavoritePress = async () => {
+    const token = await TokenService.getAccessToken();
+    if (!token) {
+      setShowAuthModal(true);
+      return;
+    }
+    toggleFavorite(product.id);
+  };
+
   const decreaseQuantity = () => {
     setQuantity(currentQuantity => Math.max(1, currentQuantity - 1));
   };
@@ -46,6 +59,11 @@ export default function ProductDetailsScreen() {
     setQuantity(currentQuantity => currentQuantity + 1);
   };
   const handleAddToCart = async () => {
+    const token = await TokenService.getAccessToken();
+    if (!token) {
+      setShowAuthModal(true);
+      return;
+    }
     try {
       setAddingToCart(true);
       await addToCart(product, quantity);
@@ -95,7 +113,7 @@ export default function ProductDetailsScreen() {
 
               <View style={styles.actions}>
                 <Pressable
-                  onPress={() => toggleFavorite(product.id)}
+                  onPress={handleFavoritePress}
                   style={styles.saveButton}
                   hitSlop={8}
                 >
@@ -198,6 +216,19 @@ export default function ProductDetailsScreen() {
             )}
           </Pressable>
         </View>
+        <FeedbackModal
+          visible={showAuthModal}
+          type="info"
+          title="Authentication Required"
+          message="Please log in or create an account to manage your cart, save favorites, or view your dashboard."
+          buttonText="Log In"
+          secondaryButtonText="Cancel"
+          onClose={() => setShowAuthModal(false)}
+          onConfirm={() => {
+            setShowAuthModal(false);
+            router.push('/screens/LoginScreen');
+          }}
+        />
       </View>
     </SafeAreaView>
   );

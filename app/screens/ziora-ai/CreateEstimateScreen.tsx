@@ -1,27 +1,18 @@
 import React, { useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Platform,
   Pressable,
   SafeAreaView,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   View,
-  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import FeedbackModal from '@/components/FeedbackModal';
-import {
-  DEFAULT_MATERIAL_SELECTIONS,
-  MATERIAL_CATEGORIES,
-  QUALITY_TIERS,
-  RENOVATION_COMPLEXITIES,
-  QualityTier,
-  RenovationComplexity,
-} from '@/app/screens/ziora-ai/mockEstimateData';
 import { ApiService } from '@/app/services/apiService';
 
 export const options = {
@@ -36,12 +27,12 @@ const ROOM_TYPES = [
   { name: 'Office', icon: 'briefcase-outline' },
 ];
 
-const COMPLEXITY_DETAILS: Record<RenovationComplexity, string> = {
-  'Cosmetic Refresh': 'Painting, surface polishing, replacing minor fittings. No demolition.',
-  'Standard Renovation': 'New flooring, cabinetry refurb, updated lighting, standard fixtures.',
-  'Major Renovation': 'Structural alterations, full rewiring/plumbing, new walls or major layouts.',
-  'Complete Remodel': 'Strip down to bare bricks, total layout reconstruction, top-tier materials.',
-};
+const QUALITY_TIERS = [
+  { value: 0, label: 'Budget', desc: 'Cost-conscious finishes & standard materials' },
+  { value: 1, label: 'Standard', desc: 'Balanced quality, durable fixtures & modern look' },
+  { value: 2, label: 'Premium', desc: 'High-grade materials, custom finishes & enhanced detail' },
+  { value: 3, label: 'Luxury', desc: 'Top-tier luxury materials, imported fixtures & full bespoke design' },
+];
 
 export default function CreateEstimateScreen() {
   const router = useRouter();
@@ -63,27 +54,20 @@ export default function CreateEstimateScreen() {
   const [length, setLength] = useState('0');
   const [width, setWidth] = useState('0');
   const [height, setHeight] = useState('0');
-  const [complexity, setComplexity] = useState<RenovationComplexity>('Standard Renovation');
-  const [materialSelections, setMaterialSelections] = useState(DEFAULT_MATERIAL_SELECTIONS);
-  const [includeFlooring, setIncludeFlooring] = useState(true);
-  const [includePainting, setIncludePainting] = useState(true);
-  const [includeElectrical, setIncludeElectrical] = useState(true);
-  const [includePlumbing, setIncludePlumbing] = useState(true);
+  const [qualityTier, setQualityTier] = useState<number>(1); // 1 = Standard default
   const [contingency, setContingency] = useState('10');
+  const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Calculates a live data completeness score
+  // Calculates data completeness score
   const completionScore = useMemo(() => {
-    let score = 40;
+    let score = 30;
     if (projectName.trim()) score += 20;
-    if (parseFloat(length) > 0 && parseFloat(width) > 0 && parseFloat(height) > 0) score += 25;
-    if (complexity) score += 15;
+    if (parseFloat(length) > 0 && parseFloat(width) > 0 && parseFloat(height) > 0) score += 30;
+    if (qualityTier !== undefined) score += 20;
     return Math.min(100, score);
-  }, [complexity, height, length, projectName, width]);
+  }, [height, length, projectName, qualityTier, width]);
 
-  const setMaterialTier = (key: keyof typeof DEFAULT_MATERIAL_SELECTIONS, tier: QualityTier) => {
-    setMaterialSelections((current) => ({ ...current, [key]: tier }));
-  };
   const parseDimension = (val: string) => {
     const sanitized = val.replace(',', '.').trim();
     const parsed = parseFloat(sanitized);
@@ -121,7 +105,7 @@ export default function CreateEstimateScreen() {
       const widVal = parseDimension(width);
       const heiVal = parseDimension(height);
       if (lenVal <= 0 || widVal <= 0 || heiVal <= 0) {
-        showFeedback('error', 'Invalid Dimensions', 'Please check and enter room dimensions greater than 0 meters (e.g. 4.5).');
+        showFeedback('error', 'Invalid Dimensions', 'Please enter room dimensions greater than 0 meters (e.g. 4.5).');
         return false;
       }
     }
@@ -153,36 +137,22 @@ export default function CreateEstimateScreen() {
     const heiVal = parseDimension(height);
 
     if (lenVal <= 0 || widVal <= 0 || heiVal <= 0) {
-      showFeedback('error', 'Invalid Dimensions', 'Room length, width, and height must be greater than zero. Please go back to Step 2 and correct the dimensions.');
+      showFeedback('error', 'Invalid Dimensions', 'Room length, width, and height must be greater than zero.');
       return;
     }
 
     setIsSubmitting(true);
 
-    // Map material selections record to selectedItems array
-    const selectedItems = Object.entries(materialSelections).map(([category, item]) => ({
-      category,
-      item,
-    }));
-
     try {
       const res = await ApiService.createRenovationEstimate({
         projectName: projectName.trim(),
         roomType,
-        lengthMeters: lenVal,
-        widthMeters: widVal,
-        heightMeters: heiVal,
-        finishLevel: complexity,
-        includeFlooring,
-        includePainting,
-        includeElectrical,
-        includePlumbing,
+        lengthM: lenVal,
+        widthM: widVal,
+        heightM: heiVal,
+        qualityTier,
         contingencyPercent: parseFloat(contingency) || 10,
-        roomDimensions: {
-          length: lenVal,
-          width: widVal,
-          height: heiVal,
-        },
+        notes: notes.trim() || undefined,
       });
 
       const rawData = (res as any)?.data || res;
@@ -197,7 +167,7 @@ export default function CreateEstimateScreen() {
         });
       } else {
         const errorsText = (res as any)?.errors && (res as any)?.errors.length > 0 ? (res as any)?.errors.join('\n') : '';
-        const errMsg = (res as any)?.message || errorsText || JSON.stringify(res) || 'Unable to save your smart estimate.';
+        const errMsg = (res as any)?.message || errorsText || 'Unable to save smart estimate.';
         showFeedback('error', 'Creation Failed', errMsg);
       }
     } catch (err: any) {
@@ -208,14 +178,15 @@ export default function CreateEstimateScreen() {
       setIsSubmitting(false);
     }
   };
+
   const getStepTitle = () => {
     switch (currentStep) {
       case 1:
         return 'Project Setup';
       case 2:
-        return 'Room Size';
+        return 'Dimensions';
       case 3:
-        return 'Details & Buffer';
+        return 'Quality & Buffer';
       default:
         return 'Smart Estimate';
     }
@@ -223,7 +194,7 @@ export default function CreateEstimateScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* Dynamic Header */}
+      {/* Header */}
       <View style={styles.header}>
         <Pressable
           style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}
@@ -256,22 +227,19 @@ export default function CreateEstimateScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Notice Info Banner */}
+        {/* Info Banner */}
         <View style={styles.infoBanner}>
           <Ionicons name="information-circle-outline" size={18} color="#C9922A" />
           <Text style={styles.infoBannerText} allowFontScaling={false}>
-            AI preliminary estimates are for budgeting. Bogat binding quotations are issued after site inspections.
+            AI preliminary estimates are for budgeting. Official binding quotations are issued after site inspection.
           </Text>
         </View>
 
-        {/* STEP 1: Project setup & room type */}
+        {/* STEP 1: Project Setup */}
         {currentStep === 1 && (
           <View style={styles.stepContainer}>
             <Text style={styles.introHeading} allowFontScaling={false}>
-              Let's name your project
-            </Text>
-            <Text style={styles.label} allowFontScaling={false}>
-              PROJECT NAME
+              Project Name
             </Text>
             <TextInput
               style={styles.textInput}
@@ -283,7 +251,7 @@ export default function CreateEstimateScreen() {
             />
 
             <Text style={styles.introHeading} allowFontScaling={false}>
-              Choose the room type
+              Choose Room Type
             </Text>
             <View style={styles.roomGrid}>
               {ROOM_TYPES.map((item) => {
@@ -292,10 +260,7 @@ export default function CreateEstimateScreen() {
                   <Pressable
                     key={item.name}
                     style={[styles.roomCard, isSelected && styles.roomCardSelected]}
-                    onPress={() => {
-                      setRoomType(item.name);
-                      setIncludePlumbing(item.name === 'Kitchen' || item.name === 'Bathroom');
-                    }}
+                    onPress={() => setRoomType(item.name)}
                   >
                     {isSelected && (
                       <View style={styles.roomCardCheckmark}>
@@ -317,21 +282,22 @@ export default function CreateEstimateScreen() {
             </View>
           </View>
         )}
-        {/* STEP 2: Room dimensions */}
+
+        {/* STEP 2: Room Dimensions */}
         {currentStep === 2 && (
           <View style={styles.stepContainer}>
             <Text style={styles.introHeading} allowFontScaling={false}>
-              Enter space dimensions
+              Room Dimensions (Meters)
             </Text>
             <Text style={styles.sectionSubtitle} allowFontScaling={false}>
-              Dimensions are essential to calculate floor and wall square meters accurately.
+              Enter length, width, and height to calculate square meters accurately.
             </Text>
 
             <View style={{ gap: 12, marginTop: 8 }}>
               {[
-                { label: 'Room Length', val: length, setter: setLength, placeholder: '4.5', desc: 'Front-to-back distance', icon: 'swap-horizontal-outline' },
-                { label: 'Room Width', val: width, setter: setWidth, placeholder: '3.5', desc: 'Side-to-side distance', icon: 'swap-vertical-outline' },
-                { label: 'Ceiling Height', val: height, setter: setHeight, placeholder: '2.8', desc: 'Floor-to-ceiling height', icon: 'resize-outline' },
+                { label: 'Room Length (m)', val: length, setter: setLength, placeholder: '4.5', desc: 'Length in meters', icon: 'swap-horizontal-outline' },
+                { label: 'Room Width (m)', val: width, setter: setWidth, placeholder: '3.5', desc: 'Width in meters', icon: 'swap-vertical-outline' },
+                { label: 'Ceiling Height (m)', val: height, setter: setHeight, placeholder: '2.8', desc: 'Height in meters', icon: 'resize-outline' },
               ].map((dim) => (
                 <View key={dim.label} style={styles.dimensionCard}>
                   <View style={styles.dimLeft}>
@@ -357,69 +323,51 @@ export default function CreateEstimateScreen() {
                 </View>
               ))}
             </View>
-
-            {/*
-            <View style={styles.calcPreviewBox}>
-              <View style={styles.calcRow}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Ionicons name="grid-outline" size={14} color="#8E8E93" />
-                  <Text style={styles.calcLabel} allowFontScaling={false}>Estimated Floor Area:</Text>
-                </View>
-                <Text style={styles.calcValue} allowFontScaling={false}>
-                  Floor Area sqm
-                </Text>
-              </View>
-              <View style={styles.calcRow}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Ionicons name="git-commit-outline" size={14} color="#8E8E93" />
-                  <Text style={styles.calcLabel} allowFontScaling={false}>Estimated Wall Area:</Text>
-                </View>
-                <Text style={styles.calcValue} allowFontScaling={false}>
-                  Wall Area sqm
-                </Text>
-              </View>
-            </View>
-            */}
           </View>
         )}
 
-
-        {/* STEP 3: Options & Contingency */}
+        {/* STEP 3: Quality Tier, Contingency & Notes */}
         {currentStep === 3 && (
           <View style={styles.stepContainer}>
+            {/* Commented out Quality Tier Selector
             <Text style={styles.introHeading} allowFontScaling={false}>
-              Included scope of work
+              Select Quality Tier
             </Text>
             <Text style={styles.sectionSubtitle} allowFontScaling={false}>
-              Uncheck items that are already installed or excluded from your plan.
+              Choose the finish standard for materials and fixtures.
             </Text>
 
-            <View style={styles.scopeWrapper}>
-              {[
-                { title: 'Flooring installation', state: includeFlooring, setter: setIncludeFlooring },
-                { title: 'Interior painting & walls', state: includePainting, setter: setIncludePainting },
-                { title: 'Electrical fittings & lighting', state: includeElectrical, setter: setIncludeElectrical },
-                { title: 'Plumbing work & fittings', state: includePlumbing, setter: setIncludePlumbing },
-              ].map((scope) => (
-                <View key={scope.title} style={styles.scopeRow}>
-                  <Text style={styles.scopeRowTitle} allowFontScaling={false}>
-                    {scope.title}
-                  </Text>
-                  <Switch
-                    value={scope.state}
-                    onValueChange={scope.setter}
-                    trackColor={{ false: '#262626', true: '#C9922A' }}
-                    thumbColor="#FFFFFF"
-                  />
-                </View>
-              ))}
+            <View style={{ gap: 10 }}>
+              {QUALITY_TIERS.map((tier) => {
+                const isSelected = qualityTier === tier.value;
+                return (
+                  <Pressable
+                    key={tier.value}
+                    style={[styles.tierCard, isSelected && styles.tierCardSelected]}
+                    onPress={() => setQualityTier(tier.value)}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.tierTitle, isSelected && { color: '#C9922A' }]} allowFontScaling={false}>
+                        {tier.label}
+                      </Text>
+                      <Text style={styles.tierDesc} allowFontScaling={false}>
+                        {tier.desc}
+                      </Text>
+                    </View>
+                    <View style={[styles.radioCircle, isSelected && styles.radioCircleSelected]}>
+                      {isSelected && <View style={styles.radioInnerCircle} />}
+                    </View>
+                  </Pressable>
+                );
+              })}
             </View>
+            */}
 
-            <Text style={styles.introHeading} allowFontScaling={false}>
-              Contingency Percent (%)
+            <Text style={[styles.introHeading, { marginTop: 12 }]} allowFontScaling={false}>
+              Contingency Percentage (0–20%)
             </Text>
             <Text style={styles.sectionSubtitle} allowFontScaling={false}>
-              A percentage added for unexpected costs. 10% is standard.
+              Percentage added for unexpected site variations.
             </Text>
             <View style={styles.contingencyWrapper}>
               <TextInput
@@ -431,20 +379,33 @@ export default function CreateEstimateScreen() {
                 placeholderTextColor="#5D5D5D"
               />
               <Text style={styles.contingencyPercentSign} allowFontScaling={false}>
-                % Contingency
+                % Buffer
               </Text>
             </View>
+
+            <Text style={[styles.introHeading, { marginTop: 12 }]} allowFontScaling={false}>
+              Special Requirements / Notes
+            </Text>
+            <TextInput
+              style={[styles.textInput, { height: 80, paddingTop: 12 }]}
+              multiline
+              numberOfLines={3}
+              placeholder="e.g. Include marble countertop, extra wall sockets..."
+              placeholderTextColor="#5D5D5D"
+              value={notes}
+              onChangeText={setNotes}
+            />
           </View>
         )}
       </ScrollView>
 
-      {/* Sticky Bottom Actions */}
+      {/* Footer Actions */}
       <View style={styles.footer}>
         <Pressable
           style={({ pressed }) => [
             styles.ctaButton,
             (pressed || isSubmitting) && styles.ctaButtonPressed,
-            isSubmitting && { opacity: 0.8 }
+            isSubmitting && { opacity: 0.8 },
           ]}
           onPress={handleNext}
           disabled={isSubmitting}
@@ -460,12 +421,13 @@ export default function CreateEstimateScreen() {
                 style={{ marginRight: 6 }}
               />
               <Text style={styles.ctaButtonText} allowFontScaling={false}>
-                {currentStep === 3 ? 'Generate Smart Estimate' : 'Continue'}
+                {currentStep === 3 ? 'Calculate Estimate' : 'Continue'}
               </Text>
             </>
           )}
         </Pressable>
       </View>
+
       <FeedbackModal
         visible={feedbackVisible}
         type={feedbackType}
@@ -501,6 +463,9 @@ const styles = StyleSheet.create({
     borderColor: '#1D1D1D',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  pressed: {
+    opacity: 0.7,
   },
   headerTitleContainer: {
     alignItems: 'center',
@@ -584,248 +549,53 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginTop: -8,
   },
-  label: {
-    color: '#8E8E93',
-    fontFamily: 'Manrope',
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.6,
-    marginBottom: -8,
-  },
   textInput: {
     height: 50,
     backgroundColor: '#0F0F0F',
     borderWidth: 1,
     borderColor: '#242424',
     borderRadius: 12,
+    paddingHorizontal: 14,
     color: '#FFFFFF',
     fontFamily: 'Manrope',
     fontSize: 14,
-    paddingHorizontal: 16,
   },
   roomGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
-    marginTop: 4,
   },
   roomCard: {
     width: '48%',
-    height: 94,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#1C1C1E',
     backgroundColor: '#0F0F0F',
-    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#242424',
+    borderRadius: 14,
+    padding: 16,
     alignItems: 'center',
-    padding: 10,
+    position: 'relative',
   },
   roomCardSelected: {
     borderColor: '#C9922A',
-    backgroundColor: 'rgba(201, 146, 42, 0.05)',
+    backgroundColor: 'rgba(201, 146, 42, 0.08)',
+  },
+  roomCardCheckmark: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
   },
   roomIcon: {
     marginBottom: 8,
   },
   roomText: {
-    color: '#AEAEB2',
+    color: '#8E8E93',
     fontFamily: 'Manrope',
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '600',
   },
   roomTextSelected: {
-    color: '#C9922A',
-  },
-  roomCardCheckmark: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-  },
-  dimensionsLayout: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  dimensionBox: {
-    flex: 1,
-  },
-  numberInput: {
-    height: 50,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#242424',
-    backgroundColor: '#0F0F0F',
     color: '#FFFFFF',
-    fontFamily: 'Manrope',
-    fontSize: 15,
     fontWeight: '800',
-    textAlign: 'center',
-  },
-  calcPreviewBox: {
-    backgroundColor: '#0F0F0F',
-    borderWidth: 1,
-    borderColor: '#1D1D1D',
-    borderRadius: 12,
-    padding: 14,
-    gap: 8,
-    marginTop: 10,
-  },
-  calcRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  calcLabel: {
-    color: '#8E8E93',
-    fontFamily: 'Manrope',
-    fontSize: 12,
-  },
-  calcValue: {
-    color: '#C9922A',
-    fontFamily: 'Manrope',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  complexityWrapper: {
-    gap: 12,
-  },
-  complexityCard: {
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#1C1C1E',
-    backgroundColor: '#0F0F0F',
-    padding: 14,
-    gap: 6,
-  },
-  complexityCardSelected: {
-    borderColor: '#C9922A',
-    backgroundColor: 'rgba(201, 146, 42, 0.08)',
-  },
-  complexityHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  complexityName: {
-    color: '#AEAEB2',
-    fontFamily: 'Manrope',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  complexityNameActive: {
-    color: '#C9922A',
-  },
-  complexityDetail: {
-    color: '#8E8E93',
-    fontFamily: 'Manrope',
-    fontSize: 11,
-    lineHeight: 16,
-    marginLeft: 30,
-  },
-  materialBlock: {
-    gap: 12,
-  },
-  materialRow: {
-    backgroundColor: '#0F0F0F',
-    borderWidth: 1,
-    borderColor: '#1C1C1E',
-    borderRadius: 14,
-    padding: 12,
-    gap: 10,
-  },
-  materialLabel: {
-    color: '#FFFFFF',
-    fontFamily: 'Manrope',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  tierSelectorGroup: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  tierOption: {
-    flex: 1,
-    height: 34,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#242424',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  tierOptionActive: {
-    backgroundColor: '#C9922A',
-    borderColor: '#C9922A',
-  },
-  tierOptionText: {
-    color: '#8E8E93',
-    fontFamily: 'Manrope',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  tierOptionTextActive: {
-    color: '#000000',
-  },
-  scopeWrapper: {
-    gap: 10,
-  },
-  scopeRow: {
-    height: 56,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#1C1C1E',
-    backgroundColor: '#0F0F0F',
-    paddingHorizontal: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  scopeRowTitle: {
-    color: '#FFFFFF',
-    fontFamily: 'Manrope',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  contingencyWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  contingencyPercentSign: {
-    color: '#8E8E93',
-    fontFamily: 'Manrope',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  footer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: '#070707',
-    borderTopWidth: 1,
-    borderColor: '#151515',
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: Platform.OS === 'ios' ? 24 : 12,
-  },
-  ctaButton: {
-    height: 52,
-    borderRadius: 12,
-    backgroundColor: '#C9922A',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  ctaButtonPressed: {
-    backgroundColor: '#A37521',
-    transform: [{ scale: 0.98 }],
-  },
-  ctaButtonText: {
-    color: '#000000',
-    fontFamily: 'Manrope',
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  pressed: {
-    opacity: 0.75,
   },
   dimensionCard: {
     flexDirection: 'row',
@@ -833,62 +603,141 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     backgroundColor: '#0F0F0F',
     borderWidth: 1,
-    borderColor: '#1D1D1D',
+    borderColor: '#242424',
     borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    padding: 14,
   },
   dimLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    flex: 1,
   },
   dimIconBg: {
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: 'rgba(201, 146, 42, 0.08)',
+    backgroundColor: 'rgba(201, 146, 42, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   dimTitle: {
     color: '#FFFFFF',
     fontFamily: 'Manrope',
-    fontSize: 13,
-    fontWeight: '800',
+    fontSize: 14,
+    fontWeight: '700',
   },
   dimDesc: {
     color: '#8E8E93',
     fontFamily: 'Manrope',
-    fontSize: 10,
-    marginTop: 2,
+    fontSize: 11,
   },
   dimInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    width: 90,
-    height: 40,
-    backgroundColor: '#070707',
-    borderWidth: 1,
-    borderColor: '#242424',
-    borderRadius: 8,
-    paddingHorizontal: 8,
+    gap: 6,
   },
   dimTextInput: {
-    flex: 1,
+    width: 65,
+    height: 40,
+    backgroundColor: '#181818',
+    borderWidth: 1,
+    borderColor: '#2E2E2E',
+    borderRadius: 8,
+    textAlign: 'center',
     color: '#FFFFFF',
     fontFamily: 'Manrope',
     fontSize: 14,
-    fontWeight: '800',
-    textAlign: 'right',
-    padding: 0,
+    fontWeight: '700',
   },
   dimUnit: {
     color: '#8E8E93',
     fontFamily: 'Manrope',
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '700',
-    marginLeft: 4,
+  },
+  tierCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0F0F0F',
+    borderWidth: 1,
+    borderColor: '#242424',
+    borderRadius: 14,
+    padding: 14,
+  },
+  tierCardSelected: {
+    borderColor: '#C9922A',
+    backgroundColor: 'rgba(201, 146, 42, 0.08)',
+  },
+  tierTitle: {
+    color: '#FFFFFF',
+    fontFamily: 'Manrope',
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  tierDesc: {
+    color: '#8E8E93',
+    fontFamily: 'Manrope',
+    fontSize: 11,
+    lineHeight: 16,
+  },
+  radioCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: '#3D3D3D',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 12,
+  },
+  radioCircleSelected: {
+    borderColor: '#C9922A',
+  },
+  radioInnerCircle: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#C9922A',
+  },
+  contingencyWrapper: {
+    position: 'relative',
+    justifyContent: 'center',
+  },
+  contingencyPercentSign: {
+    position: 'absolute',
+    right: 14,
+    color: '#8E8E93',
+    fontFamily: 'Manrope',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#070707',
+    borderTopWidth: 1,
+    borderColor: '#151515',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+  },
+  ctaButton: {
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: '#C9922A',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ctaButtonPressed: {
+    opacity: 0.8,
+  },
+  ctaButtonText: {
+    color: '#000000',
+    fontFamily: 'Manrope',
+    fontSize: 15,
+    fontWeight: '800',
   },
 });

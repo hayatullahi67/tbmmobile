@@ -25,6 +25,7 @@ import { footerNavItems } from '@/app/data/home';
 import { ApiService } from '@/app/services/apiService';
 import { HomeFooter } from '@/components/home/HomeFooter';
 import { HOME_HORIZONTAL_PADDING } from '@/components/home/layout';
+import FeedbackModal from '@/components/FeedbackModal';
 
 export const options = { headerShown: false };
 
@@ -58,6 +59,24 @@ export default function AddressFormScreen() {
   const [isDefault, setIsDefault] = useState(params.isDefault === 'true');
   const [submitting, setSubmitting] = useState(false);
 
+  // Modal State
+  const [modalVisible, setModalVisible] = useState(false);
+  const [modalConfig, setModalConfig] = useState<{
+    type: 'success' | 'error' | 'info';
+    title: string;
+    message: string;
+    onClose?: () => void;
+  }>({
+    type: 'info',
+    title: '',
+    message: '',
+  });
+
+  const showFeedback = (type: 'success' | 'error' | 'info', title: string, message: string, onClose?: () => void) => {
+    setModalConfig({ type, title, message, onClose });
+    setModalVisible(true);
+  };
+
   const [fontsLoaded] = useFonts({
     Raleway_400Regular,
     Raleway_500Medium,
@@ -68,27 +87,27 @@ export default function AddressFormScreen() {
 
   const handleSubmit = async () => {
     if (!fullName.trim()) {
-      Alert.alert('Validation Error', 'Full Name is required.');
+      showFeedback('error', 'Validation Error', 'Full Name is required.');
       return;
     }
     if (!phone.trim()) {
-      Alert.alert('Validation Error', 'Phone Number is required.');
+      showFeedback('error', 'Validation Error', 'Phone Number is required.');
       return;
     }
     if (!street.trim()) {
-      Alert.alert('Validation Error', 'Street Address is required.');
+      showFeedback('error', 'Validation Error', 'Street Address is required.');
       return;
     }
     if (!city.trim()) {
-      Alert.alert('Validation Error', 'City is required.');
+      showFeedback('error', 'Validation Error', 'City is required.');
       return;
     }
     if (!state.trim()) {
-      Alert.alert('Validation Error', 'State is required.');
+      showFeedback('error', 'Validation Error', 'State is required.');
       return;
     }
     if (!country.trim()) {
-      Alert.alert('Validation Error', 'Country is required.');
+      showFeedback('error', 'Validation Error', 'Country is required.');
       return;
     }
 
@@ -108,14 +127,17 @@ export default function AddressFormScreen() {
       setSubmitting(true);
       if (isEdit && params.id) {
         await ApiService.updateAddress(params.id, payload);
-        Alert.alert('Success', 'Address updated successfully.');
+        showFeedback('success', 'Success', 'Address updated successfully.', () => {
+          router.back();
+        });
       } else {
         await ApiService.createAddress(payload);
-        Alert.alert('Success', 'Address added successfully.');
+        showFeedback('success', 'Success', 'Address added successfully.', () => {
+          router.back();
+        });
       }
-      router.back();
     } catch (err: any) {
-      Alert.alert('Error', err.message || 'Failed to save address.');
+      showFeedback('error', 'Error', err.message || 'Failed to save address.');
     } finally {
       setSubmitting(false);
     }
@@ -271,6 +293,18 @@ export default function AddressFormScreen() {
           onSelectItem={handleFooterSelect}
         />
       </KeyboardAvoidingView>
+      <FeedbackModal
+        visible={modalVisible}
+        type={modalConfig.type}
+        title={modalConfig.title}
+        message={modalConfig.message}
+        onClose={() => {
+          setModalVisible(false);
+          if (modalConfig.onClose) {
+            modalConfig.onClose();
+          }
+        }}
+      />
     </SafeAreaView>
   );
 }

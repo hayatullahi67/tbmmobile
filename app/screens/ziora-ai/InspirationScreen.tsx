@@ -80,7 +80,7 @@ export default function InspirationScreen() {
               title: item.title || 'Inspiration Design',
               category: cat,
               style: sty,
-              image: item.imageUrl || 'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=600',
+              image: item.imageUrl || '',
               isLocked: sty === 'Luxury' || tier === 'Premium',
               tier: tier,
               description: item.description || 'A premium design layout curated by Ziora professionals.',

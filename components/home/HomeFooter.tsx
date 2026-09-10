@@ -1,6 +1,7 @@
 import { Image } from 'expo-image';
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import { HomeNavItem } from '@/app/data/home';
 
@@ -16,17 +17,36 @@ function HomeFooterComponent({ items, activeItemId, onSelectItem }: HomeFooterPr
       {items.map(item => {
         const isActive = item.id === activeItemId;
 
+        const getActiveIconName = (id: string): any => {
+          switch (id) {
+            case 'home': return 'home';
+            case 'design': return 'cube';
+            case 'projects': return 'folder';
+            case 'shop': return 'bag-handle';
+            case 'profile': return 'person-circle';
+            default: return 'home';
+          }
+        };
+
         return (
           <Pressable
             key={item.id}
             onPress={() => onSelectItem?.(item.id)}
             style={({ pressed }) => [styles.item, pressed && styles.pressed]}
           >
-            <Image
-              source={item.icon}
-              style={[styles.icon, isActive ? styles.activeIcon : styles.inactiveIcon]}
-              contentFit="contain"
-            />
+            {item.iconName ? (
+              <Ionicons
+                name={isActive ? getActiveIconName(item.id) : (item.iconName as any)}
+                size={22}
+                color={isActive ? '#C9922A' : '#8A8A8F'}
+              />
+            ) : (
+              <Image
+                source={item.icon}
+                style={[styles.icon, isActive ? styles.activeIcon : styles.inactiveIcon]}
+                contentFit="contain"
+              />
+            )}
             <Text
               style={[styles.label, isActive ? styles.activeLabel : styles.inactiveLabel]}
               allowFontScaling={false}

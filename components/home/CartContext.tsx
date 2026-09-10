@@ -49,13 +49,12 @@ export function CartProvider({ children }: CartProviderProps) {
         setSubTotal(res.data.subTotal || 0);
         const rawItems = res.data.items || [];
         const mappedItems: CartItem[] = rawItems.map((item: any) => {
-          const cached = ApiService.getProductFromCache(item.productId) as HomeProduct | null;
-          const product: HomeProduct = cached || {
+          const product: HomeProduct = {
             id: item.productId,
             name: item.productName,
             price: `₦${Number(item.unitPrice).toLocaleString()}`,
-            image: { uri: 'https://via.placeholder.com/300/252523/ffffff?text=' + encodeURIComponent(item.productName) },
-            description: 'Premium quality product.',
+            image: item.productImageUrl ? { uri: item.productImageUrl } : { uri: 'https://via.placeholder.com/300' },
+            description: item.productSKU ? `SKU: ${item.productSKU}` : 'Premium component',
             review: 'Verified build quality access components.',
             availability: item.inStock ? 'In stock - Limited units available' : 'Out of stock',
             delivery: '15 days after payment confirmation',

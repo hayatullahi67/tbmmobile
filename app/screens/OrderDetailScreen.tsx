@@ -47,11 +47,16 @@ const mapApiOrder = (apiOrder: any): Order => {
   }
 
   // Image source
-  let imageSrc: any = require('@/assets/images/Productpic.png');
-  const imageUrl = firstItem?.product?.imageUrl || firstItem?.imageUrl || apiOrder.imageUrl || apiOrder.image;
-  if (imageUrl) {
-    imageSrc = { uri: imageUrl };
-  }
+  const imageUrl =
+    firstItem?.product?.primaryImageUrl ||
+    firstItem?.product?.imageUrl ||
+    firstItem?.primaryImageUrl ||
+    firstItem?.imageUrl ||
+    apiOrder.primaryImageUrl ||
+    apiOrder.imageUrl ||
+    apiOrder.image;
+
+  const imageSrc = imageUrl ? { uri: imageUrl } : { uri: '' };
 
   // Map status
   let statusName: Order['status'] = 'Processing';

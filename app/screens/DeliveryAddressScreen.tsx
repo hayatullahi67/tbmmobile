@@ -22,6 +22,7 @@ import { footerNavItems } from '@/app/data/home';
 import { ApiService } from '@/app/services/apiService';
 import { HomeFooter } from '@/components/home/HomeFooter';
 import { HOME_HORIZONTAL_PADDING } from '@/components/home/layout';
+import FeedbackModal from '@/components/FeedbackModal';
 
 export const options = { headerShown: false };
 
@@ -42,6 +43,33 @@ export default function DeliveryAddressScreen() {
   const router = useRouter();
   const [addresses, setAddresses] = useState<ApiAddress[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Modal State
+  const [modalVisible, setModalVisible] = useState(false);
+  const [modalConfig, setModalConfig] = useState<{
+    type: 'success' | 'error' | 'info';
+    title: string;
+    message: string;
+    buttonText?: string;
+    secondaryButtonText?: string;
+    onConfirm?: () => void;
+  }>({
+    type: 'info',
+    title: '',
+    message: '',
+  });
+
+  const showFeedback = (
+    type: 'success' | 'error' | 'info',
+    title: string,
+    message: string,
+    onConfirm?: () => void,
+    secondaryButtonText?: string,
+    buttonText?: string
+  ) => {
+    setModalConfig({ type, title, message, onConfirm, secondaryButtonText, buttonText });
+    setModalVisible(true);
+  };
 
   const [fontsLoaded] = useFonts({
     Raleway_400Regular,
@@ -97,28 +125,24 @@ export default function DeliveryAddressScreen() {
     });
   };
 
-  const handleDelete = async (id: string) => {
-    Alert.alert(
+  const handleDelete = (id: string) => {
+    showFeedback(
+      'error',
       'Delete Address',
       'Are you sure you want to remove this delivery address?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              setLoading(true);
-              await ApiService.deleteAddress(id);
-              Alert.alert('Success', 'Address removed successfully.');
-              await fetchAddresses();
-            } catch (err: any) {
-              Alert.alert('Error', err.message || 'Failed to delete address.');
-              setLoading(false);
-            }
-          },
-        },
-      ]
+      async () => {
+        try {
+          setLoading(true);
+          await ApiService.deleteAddress(id);
+          showFeedback('success', 'Success', 'Address removed successfully.');
+          await fetchAddresses();
+        } catch (err: any) {
+          showFeedback('error', 'Error', err.message || 'Failed to delete address.');
+          setLoading(false);
+        }
+      },
+      'Cancel',
+      'Delete'
     );
   };
 
@@ -126,10 +150,10 @@ export default function DeliveryAddressScreen() {
     try {
       setLoading(true);
       await ApiService.setDefaultAddress(id);
-      Alert.alert('Success', 'Default address updated.');
+      showFeedback('success', 'Success', 'Default address updated.');
       await fetchAddresses();
     } catch (err: any) {
-      Alert.alert('Error', err.message || 'Failed to update default address.');
+      showFeedback('error', 'Error', err.message || 'Failed to update default address.');
       setLoading(false);
     }
   };
@@ -262,6 +286,16 @@ export default function DeliveryAddressScreen() {
           onSelectItem={handleFooterSelect}
         />
       </View>
+      <FeedbackModal
+        visible={modalVisible}
+        type={modalConfig.type}
+        title={modalConfig.title}
+        message={modalConfig.message}
+        buttonText={modalConfig.buttonText}
+        secondaryButtonText={modalConfig.secondaryButtonText}
+        onConfirm={modalConfig.onConfirm}
+        onClose={() => setModalVisible(false)}
+      />
     </SafeAreaView>
   );
 }

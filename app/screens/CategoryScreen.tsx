@@ -15,6 +15,7 @@ import {
 import {
     footerNavItems,
     HomeProduct,
+    mapApiProduct,
 } from '@/app/data/home';
 import { ApiService } from '@/app/services/apiService';
 import { useFavorites } from '@/components/home/FavoritesContext';
@@ -44,20 +45,6 @@ export default function CategoryScreen() {
       setLoading(false);
       return;
     }
-
-    const mapApiProduct = (item: any): HomeProduct => {
-      return {
-        id: item.id,
-        name: item.name,
-        price: item.priceDisplay || (item.price != null ? `₦${Number(item.price).toLocaleString()}` : 'Request Price'),
-        image: { uri: item.primaryImageUrl || 'https://via.placeholder.com/300/252523/ffffff?text=No+Image' },
-        description: item.description || item.shortDescription || 'No description available.',
-        review: 'Highly recommended by verified buyers for build quality.',
-        availability: item.inStock ? 'In stock - Limited units available' : 'Out of stock',
-        delivery: '15 days after payment confirmation',
-        colors: item.color ? [item.color] : ['#C9922A', '#E8E8E8', '#1A1A1A'],
-      };
-    };
 
     const loadCategoryData = async () => {
       try {

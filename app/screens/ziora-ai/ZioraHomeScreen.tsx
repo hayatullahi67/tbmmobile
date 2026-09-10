@@ -1,3 +1,4 @@
+import { ApiService } from '@/app/services/apiService';
 import FeedbackModal from '@/components/FeedbackModal';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -5,7 +6,6 @@ import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ApiService } from '@/app/services/apiService';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -160,53 +160,94 @@ export default function ZioraHomeScreen() {
 
           {/* Interactive Section */}
           <View style={styles.interactiveSection}>
-            {/* Search/Prompt Input */}
-            <View style={styles.searchBarContainer}>
+            {/* AI Prompt Composer Card */}
+            <View style={styles.composerCard}>
               <TextInput
-                style={styles.searchInput}
-                placeholder="Ask Ziora anything..."
+                style={styles.composerInput}
+                placeholder="Describe your dream space, materials, or style..."
                 placeholderTextColor="#666666"
                 value={promptText}
                 onChangeText={setPromptText}
-                multiline={false}
-                returnKeyType="done"
+                multiline={true}
+                numberOfLines={3}
                 allowFontScaling={false}
               />
-              <Pressable
-                style={({ pressed }) => [styles.searchButton, pressed && styles.pressed]}
-                onPress={handleSend}
-              >
-                <Ionicons name="arrow-forward" size={20} color="#000000" />
-              </Pressable>
-            </View>
 
-            {/* Output Type Switcher Segmented Control */}
-            <View style={styles.segmentContainer}>
-              <Pressable
-                style={[styles.segmentButton, outputType === 1 && styles.segmentActive]}
-                onPress={() => setOutputType(1)}
-              >
-                <Ionicons name="image-outline" size={16} color={outputType === 1 ? '#000000' : '#888888'} />
-                <Text style={[styles.segmentText, outputType === 1 && styles.segmentTextActive]} allowFontScaling={false}>
-                  Image Result
-                </Text>
-              </Pressable>
-              <Pressable
-                style={[styles.segmentButton, outputType === 2 && styles.segmentActive]}
-                onPress={() => setOutputType(2)}
-              >
-                <Ionicons name="videocam-outline" size={16} color={outputType === 2 ? '#000000' : '#888888'} />
-                <Text style={[styles.segmentText, outputType === 2 && styles.segmentTextActive]} allowFontScaling={false}>
-                  Video Result
-                </Text>
-              </Pressable>
+              {referenceImage && (
+                <View style={styles.attachmentWrapper}>
+                  <View style={styles.referencePreviewContainer}>
+                    <Image source={{ uri: referenceImage }} style={styles.referencePreviewImage} />
+                    <Pressable style={styles.removeReferenceButton} onPress={() => setReferenceImage(null)}>
+                      <Ionicons name="close" size={14} color="#FFFFFF" />
+                    </Pressable>
+                  </View>
+                </View>
+              )}
+
+              <View style={styles.composerToolbar}>
+                <View style={styles.toolbarLeft}>
+                  {/* Photo picker trigger */}
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.toolbarIconButton,
+                      referenceImage ? styles.toolbarIconButtonActive : null,
+                      pressed && styles.pressed
+                    ]}
+                    onPress={handleSelectReferenceImage}
+                  >
+                    <Ionicons
+                      name={referenceImage ? "image" : "image-outline"}
+                      size={20}
+                      color={referenceImage ? "#B58529" : "#888888"}
+                    />
+                  </Pressable>
+
+                  {/* Output Type Switcher Capsule */}
+                  <View style={styles.compactSwitcher}>
+                    <Pressable
+                      style={[styles.switcherPill, outputType === 1 && styles.switcherPillActive]}
+                      onPress={() => setOutputType(1)}
+                    >
+                      <Ionicons name="image" size={13} color={outputType === 1 ? '#000000' : '#888888'} />
+                      <Text style={[styles.switcherPillText, outputType === 1 && styles.switcherPillTextActive]} allowFontScaling={false}>
+                        Image
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      style={[styles.switcherPill, outputType === 2 && styles.switcherPillActive]}
+                      onPress={() => setOutputType(2)}
+                    >
+                      <Ionicons name="videocam" size={13} color={outputType === 2 ? '#000000' : '#888888'} />
+                      <Text style={[styles.switcherPillText, outputType === 2 && styles.switcherPillTextActive]} allowFontScaling={false}>
+                        Video
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+
+                {/* Send/Generate Button */}
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.sendIconButton,
+                    promptText.trim().length > 0 && styles.sendIconButtonActive,
+                    pressed && styles.pressed
+                  ]}
+                  onPress={handleSend}
+                >
+                  <Ionicons
+                    name="arrow-up"
+                    size={20}
+                    color={promptText.trim().length > 0 ? "#000000" : "#555555"}
+                  />
+                </Pressable>
+              </View>
             </View>
 
             {/* Style Selector Section */}
             <Text style={styles.sectionHeading} allowFontScaling={false}>
               Choose Design Style
             </Text>
-            <View style={{ marginBottom: 16 }}>
+            <View style={{ marginBottom: 20 }}>
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -220,6 +261,7 @@ export default function ZioraHomeScreen() {
                       style={[styles.stylePill, isActive && styles.stylePillActive]}
                       onPress={() => setSelectedStyleId(style.id)}
                     >
+                      {isActive && <View style={styles.activeStyleDot} />}
                       <Text style={[styles.stylePillText, isActive && styles.stylePillTextActive]} allowFontScaling={false}>
                         {style.name}
                       </Text>
@@ -229,69 +271,50 @@ export default function ZioraHomeScreen() {
               </ScrollView>
             </View>
 
-            {/* Reference Image Actions */}
-            <View style={styles.pickerSection}>
-              <Pressable
-                style={({ pressed }) => [styles.imagePickerButton, pressed && styles.pressed]}
-                onPress={handleSelectReferenceImage}
-              >
-                <Ionicons name="camera-outline" size={18} color="#B58529" />
-                <Text style={styles.imagePickerText} allowFontScaling={false}>
-                  {referenceImage ? 'Change Reference Photo' : 'Add Reference Photo'}
-                </Text>
-              </Pressable>
-
-              {referenceImage && (
-                <View style={styles.referencePreviewContainer}>
-                  <Image source={{ uri: referenceImage }} style={styles.referencePreviewImage} />
-                  <Pressable style={styles.removeReferenceButton} onPress={() => setReferenceImage(null)}>
-                    <Ionicons name="close" size={16} color="#FFFFFF" />
-                  </Pressable>
-                </View>
-              )}
-            </View>
-
             {/* Menu Cards */}
             <Text style={styles.exploreHeading} allowFontScaling={false}>
               Explore Tools
             </Text>
-            <View style={styles.gridContainer}>
+            <View style={styles.rowContainer}>
               {/* Card 1 */}
               <Pressable
-                style={({ pressed }) => [styles.card, pressed && styles.pressed]}
-                onPress={() => router.push({
-                  pathname: '/screens/ziora-ai/VisualizerResultScreen',
-                  params: { prompt: 'Modern Luxury Living Room' }
-                })}
+                style={({ pressed }) => [styles.threeCard, pressed && styles.pressed]}
+                onPress={() => {
+                  showFeedback(
+                    'info',
+                    'How to Use Visualizer',
+                    'To use the AI Visualizer, please write your description in the input box, select a design style, and  add a reference photo above, then tap the gold arrow button.'
+                  );
+                }}
               >
                 <View style={styles.cardIconContainer}>
-                  <Ionicons name="home-outline" size={28} color="#B58529" />
+                  <Ionicons name="home-outline" size={24} color="#B58529" />
                 </View>
-                <Text style={styles.cardTitle} allowFontScaling={false}>
+                <Text style={styles.threeCardTitle} allowFontScaling={false}>
                   AI Visualizer
                 </Text>
-                <Text style={styles.cardSubtitle} allowFontScaling={false}>
-                  See before{'\n'}you build
+                <Text style={styles.threeCardSubtitle} allowFontScaling={false}>
+                  See design
                 </Text>
               </Pressable>
 
               {/* Card 2 */}
               <Pressable
-                style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+                style={({ pressed }) => [styles.threeCard, pressed && styles.pressed]}
                 onPress={() => router.push('/screens/ziora-ai/RenovationEstimatesScreen')}
               >
                 <View style={styles.cardIconContainer}>
-                  <Ionicons name="document-text-outline" size={28} color="#B58529" />
+                  <Ionicons name="document-text-outline" size={24} color="#B58529" />
                 </View>
-                <Text style={styles.cardTitle} allowFontScaling={false}>
+                <Text style={styles.threeCardTitle} allowFontScaling={false}>
                   Estimates
                 </Text>
-                <Text style={styles.cardSubtitle} allowFontScaling={false}>
-                  Get accurate{'\n'}costs
+                <Text style={styles.threeCardSubtitle} allowFontScaling={false}>
+                  Renovation costs
                 </Text>
               </Pressable>
 
-              {/* Card 3 */}
+              {/* Commented out Materials Card 3
               <Pressable
                 style={({ pressed }) => [styles.card, pressed && styles.pressed]}
                 onPress={() => router.push({
@@ -306,23 +329,25 @@ export default function ZioraHomeScreen() {
                   Materials
                 </Text>
                 <Text style={styles.cardSubtitle} allowFontScaling={false}>
-                  Find the{'\n'}best
+                  Find the
+                  best
                 </Text>
               </Pressable>
+              */}
 
               {/* Card 4 */}
               <Pressable
-                style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+                style={({ pressed }) => [styles.threeCard, pressed && styles.pressed]}
                 onPress={() => router.push('/screens/ziora-ai/InspirationScreen')}
               >
                 <View style={styles.cardIconContainer}>
-                  <Ionicons name="bulb-outline" size={28} color="#B58529" />
+                  <Ionicons name="bulb-outline" size={24} color="#B58529" />
                 </View>
-                <Text style={styles.cardTitle} allowFontScaling={false}>
+                <Text style={styles.threeCardTitle} allowFontScaling={false}>
                   Inspiration
                 </Text>
-                <Text style={styles.cardSubtitle} allowFontScaling={false}>
-                  Design{'\n'}ideas
+                <Text style={styles.threeCardSubtitle} allowFontScaling={false}>
+                  Design ideas
                 </Text>
               </Pressable>
             </View>
@@ -419,95 +444,40 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginTop: -20,
   },
-  searchBarContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#111111',
-    borderRadius: 14,
+  composerCard: {
+    backgroundColor: '#121212',
     borderWidth: 1,
     borderColor: '#222222',
-    paddingLeft: 16,
-    paddingRight: 6,
-    height: 56,
-    marginBottom: 16,
+    borderRadius: 18,
+    padding: 12,
+    marginBottom: 20,
   },
-  searchInput: {
-    flex: 1,
+  composerInput: {
     color: '#FFFFFF',
     fontFamily: 'Manrope',
-    fontSize: 14,
+    fontSize: 15,
+    minHeight: 80,
+    maxHeight: 160,
+    textAlignVertical: 'top',
+    paddingTop: 4,
+    paddingBottom: 8,
+    paddingHorizontal: 4,
   },
-  searchButton: {
-    backgroundColor: '#B58529',
-    width: 44,
-    height: 44,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  segmentContainer: {
+  attachmentWrapper: {
     flexDirection: 'row',
-    backgroundColor: '#111111',
-    borderWidth: 1,
-    borderColor: '#222222',
-    borderRadius: 12,
-    padding: 3,
-    marginBottom: 16,
-    gap: 4,
-  },
-  segmentButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: 9,
-    gap: 6,
-  },
-  segmentActive: {
-    backgroundColor: '#B58529',
-  },
-  segmentText: {
-    color: '#888888',
-    fontFamily: 'Manrope',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  segmentTextActive: {
-    color: '#000000',
-    fontWeight: '700',
-  },
-  pickerSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 24,
-    backgroundColor: '#0A0A0A',
-    borderWidth: 1,
-    borderColor: '#222222',
-    borderRadius: 12,
-    padding: 10,
-  },
-  imagePickerButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 6,
-  },
-  imagePickerText: {
-    color: '#B58529',
-    fontFamily: 'Manrope',
-    fontSize: 13,
-    fontWeight: '600',
+    marginTop: 8,
+    marginBottom: 12,
+    paddingHorizontal: 4,
   },
   referencePreviewContainer: {
     position: 'relative',
-    width: 60,
-    height: 60,
-    borderRadius: 8,
+    width: 72,
+    height: 72,
+    borderRadius: 12,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: '#333333',
+    backgroundColor: '#1a1a1a',
   },
   referencePreviewImage: {
     width: '100%',
@@ -515,11 +485,89 @@ const styles = StyleSheet.create({
   },
   removeReferenceButton: {
     position: 'absolute',
-    top: 2,
-    right: 2,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: 10,
-    padding: 2,
+    top: 4,
+    right: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    borderRadius: 12,
+    width: 22,
+    height: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  composerToolbar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#1a1a1a',
+    paddingTop: 12,
+    marginTop: 4,
+  },
+  toolbarLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  toolbarIconButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#1a1a1a',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#262626',
+  },
+  toolbarIconButtonActive: {
+    borderColor: '#B58529',
+    backgroundColor: 'rgba(181, 133, 41, 0.1)',
+  },
+  compactSwitcher: {
+    flexDirection: 'row',
+    backgroundColor: '#1a1a1a',
+    borderWidth: 1,
+    borderColor: '#262626',
+    borderRadius: 20,
+    padding: 3,
+    gap: 2,
+  },
+  switcherPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 17,
+    gap: 4,
+  },
+  switcherPillActive: {
+    backgroundColor: '#B58529',
+  },
+  switcherPillText: {
+    color: '#888888',
+    fontFamily: 'Manrope',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  switcherPillTextActive: {
+    color: '#000000',
+    fontWeight: '700',
+  },
+  sendIconButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#1a1a1a',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#262626',
+  },
+  sendIconButtonActive: {
+    backgroundColor: '#B58529',
+    borderColor: '#B58529',
   },
   sectionHeading: {
     color: '#FFFFFF',
@@ -533,12 +581,13 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   stylePill: {
-    backgroundColor: '#111111',
+    backgroundColor: '#121212',
     borderWidth: 1,
     borderColor: '#222222',
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 10,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -555,6 +604,13 @@ const styles = StyleSheet.create({
   stylePillTextActive: {
     color: '#000000',
     fontWeight: '700',
+  },
+  activeStyleDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#000000',
+    marginRight: 6,
   },
   exploreHeading: {
     color: '#FFFFFF',
@@ -615,6 +671,40 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     marginTop: 16,
+    textAlign: 'center',
+  },
+  rowContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginTop: 8,
+  },
+  threeCard: {
+    flex: 1,
+    backgroundColor: '#0A0A0A',
+    borderWidth: 1,
+    borderColor: '#222222',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 6,
+    minHeight: 110,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  threeCardTitle: {
+    color: '#FFFFFF',
+    fontFamily: 'Manrope',
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  threeCardSubtitle: {
+    color: '#777777',
+    fontFamily: 'Manrope',
+    fontSize: 9,
+    fontWeight: '400',
+    marginTop: 4,
     textAlign: 'center',
   },
 });

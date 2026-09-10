@@ -70,8 +70,8 @@ export default function CartScreen() {
 
   // Compute live billing calculations
   const subtotal = subTotal;
-  const tax = subtotal * 0.08;
-  const total = subtotal + tax;
+  const total = subtotal;
+  // const total = subtotal * 1.075;
 
   // Adjust item count label (e.g. "3 items")
   const totalItemsCount = useMemo(() => {
@@ -113,11 +113,15 @@ export default function CartScreen() {
   };
 
   const handleFooterSelect = (itemId: string) => {
+    if (itemId === 'cart') return;
     if (itemId === 'home') {
       router.replace('/screens/HomeScreen');
     }
     if (itemId === 'favorite') {
       router.push('/screens/FavoriteScreen');
+    }
+    if (itemId === 'projects') {
+      router.push('/screens/MyProjectsScreen');
     }
     if (itemId === 'profile') {
       router.push('/screens/ProfileScreen');
@@ -252,15 +256,8 @@ export default function CartScreen() {
 
               {/* Summary Card */}
               <View style={styles.summarySection}>
-                <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel} allowFontScaling={false}>
-                    Subtotal
-                  </Text>
-                  <Text style={styles.summaryValue} allowFontScaling={false}>
-                    {formatCartCurrency(subtotal)}
-                  </Text>
-                </View>
-
+                {/* Shipping commented/removed as requested */}
+                {/*
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel} allowFontScaling={false}>
                     Shipping
@@ -269,17 +266,7 @@ export default function CartScreen() {
                     FREE
                   </Text>
                 </View>
-
-                <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel} allowFontScaling={false}>
-                    Estimated Tax
-                  </Text>
-                  <Text style={styles.summaryValue} allowFontScaling={false}>
-                    {formatCartCurrency(tax)}
-                  </Text>
-                </View>
-
-                <View style={styles.dividerSummary} />
+                */}
 
                 <View style={styles.totalSummaryRow}>
                   <Text style={styles.totalLabel} allowFontScaling={false}>
@@ -296,6 +283,9 @@ export default function CartScreen() {
                 onPress={() =>
                   router.push({
                     pathname: '/screens/CheckoutScreen',
+                    params: {
+                      cartTotalPrice: String(total),
+                    }
                   })
                 }
                 style={({ pressed }) => [

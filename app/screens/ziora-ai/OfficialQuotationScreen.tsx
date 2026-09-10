@@ -1,3 +1,6 @@
+import FeedbackModal from '@/components/FeedbackModal';
+import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
   Platform,
@@ -9,9 +12,6 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import FeedbackModal from '@/components/FeedbackModal';
-import { useLocalSearchParams, useRouter } from 'expo-router';
 
 export const options = {
   headerShown: false,

@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { formatNaira } from '@/app/screens/ziora-ai/mockEstimateData';
+import { formatNaira } from '@/utils/formatters';
 import { ApiService } from '@/app/services/apiService';
 
 export const options = {
@@ -34,11 +34,36 @@ export default function RenovationEstimatesScreen() {
         if (active) {
           const mapped = list.map((item: any) => {
             const id = item.estimateId || item.id;
+            const rawTier = item.qualityTierName ?? item.qualityTier ?? item.quality ?? item.tier;
+            let tierLabel = 'Standard';
+
+            if (rawTier !== undefined && rawTier !== null) {
+              const cleanTier = String(rawTier).trim();
+              const lowerTier = cleanTier.toLowerCase();
+              if (cleanTier === '0' || lowerTier === 'budget') {
+                tierLabel = 'Budget';
+              } else if (cleanTier === '1' || lowerTier === 'standard') {
+                tierLabel = 'Standard';
+              } else if (cleanTier === '2' || lowerTier === 'premium') {
+                tierLabel = 'Premium';
+              } else if (cleanTier === '3' || lowerTier === 'luxury') {
+                tierLabel = 'Luxury';
+              } else {
+                const parsedInt = parseInt(cleanTier, 10);
+                if (!isNaN(parsedInt) && parsedInt >= 0 && parsedInt <= 3) {
+                  const tierNames = ['Budget', 'Standard', 'Premium', 'Luxury'];
+                  tierLabel = tierNames[parsedInt];
+                } else {
+                  tierLabel = cleanTier;
+                }
+              }
+            }
             return {
               id,
               estimateId: id,
               projectName: item.projectName || 'Renovation Upgrade',
               roomType: item.roomType || 'Living Room',
+              complexity: tierLabel,
               totalEstimate: item.totalEstimate || 0,
               createdAtUtc: item.createdAtUtc,
             };

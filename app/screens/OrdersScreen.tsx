@@ -7,15 +7,15 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Pressable,
   SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   View,
-  ActivityIndicator,
 } from 'react-native';
 
 import { footerNavItems } from '@/app/data/home';
@@ -30,29 +30,34 @@ export const options = {
 
 const mapApiOrder = (apiOrder: any): Order => {
   const firstItem = apiOrder.items?.[0] || apiOrder.orderItems?.[0];
-  const productName = 
-    apiOrder.productName || 
-    firstItem?.productName || 
-    firstItem?.product?.name || 
+  const productName =
+    apiOrder.productName ||
+    firstItem?.productName ||
+    firstItem?.product?.name ||
     `Order #${apiOrder.orderNumber || apiOrder.id?.substring(0, 8) || ''}`;
 
   // Price formatting
   let priceStr = 'N0';
   const priceVal = apiOrder.totalAmount ?? apiOrder.total ?? apiOrder.price ?? firstItem?.price;
   if (priceVal !== undefined && priceVal !== null) {
-    priceStr = typeof priceVal === 'number' 
-      ? `₦${priceVal.toLocaleString()}` 
-      : String(priceVal).startsWith('₦') || String(priceVal).startsWith('N') 
-        ? String(priceVal) 
+    priceStr = typeof priceVal === 'number'
+      ? `₦${priceVal.toLocaleString()}`
+      : String(priceVal).startsWith('₦') || String(priceVal).startsWith('N')
+        ? String(priceVal)
         : `₦${priceVal}`;
   }
 
   // Image source
-  let imageSrc: any = require('@/assets/images/Productpic.png');
-  const imageUrl = firstItem?.product?.imageUrl || firstItem?.imageUrl || apiOrder.imageUrl || apiOrder.image;
-  if (imageUrl) {
-    imageSrc = { uri: imageUrl };
-  }
+  const imageUrl =
+    firstItem?.product?.primaryImageUrl ||
+    firstItem?.product?.imageUrl ||
+    firstItem?.primaryImageUrl ||
+    firstItem?.imageUrl ||
+    apiOrder.primaryImageUrl ||
+    apiOrder.imageUrl ||
+    apiOrder.image;
+
+  const imageSrc = imageUrl ? { uri: imageUrl } : { uri: '' };
 
   // Map status
   let statusName: Order['status'] = 'Processing';
@@ -261,7 +266,7 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 110,
     gap: 14,
-    marginTop:20,
+    marginTop: 20,
   },
   card: {
     flexDirection: 'row',
